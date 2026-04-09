@@ -1,0 +1,10 @@
+[project]
+name = "anti-scam-agent"
+version = "0.1.0"
+description = "Anti-Spam Agent is a multi-agent system that uses LLMs to impersonate real users on specified web pages and detect data-phishing attempts in real time, without relying on blacklist databases."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openai-agents>=0.13.6",
+    "python-dotenv>=1.2.2",
+]
