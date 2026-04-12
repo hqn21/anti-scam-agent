@@ -9,7 +9,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "openai-agents>=0.13.6",
+    "pydantic>=2.12.5",
     "python-dotenv>=1.2.2",
+    "python-whois>=0.9.6",
 ]
 
 [dependency-groups]
