@@ -26,7 +26,7 @@ def _get_domain_info(domain: str) -> DomainInfo:
     )
     return domain_info
 
-@function_tool(defer_loading=True)
+@function_tool
 def get_domain_info(
     domain: Annotated[str, "The domain to look up."],
 ) -> DomainInfo:
