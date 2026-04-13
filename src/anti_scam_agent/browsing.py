@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from browser_use import Agent as BrowserAgent, ChatOpenAI
+from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser
 from dotenv import load_dotenv
 
 from anti_scam_agent.models import BrowsingResult, FakePersona
@@ -60,6 +60,12 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)
+
+    browser = Browser(
+        minimum_wait_page_load_time=2.0,
+        wait_for_network_idle_page_load_time=3.0,
+        wait_between_actions=1.0,
+    )
 
     agent = BrowserAgent(
         task=task,
