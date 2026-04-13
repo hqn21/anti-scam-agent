@@ -56,7 +56,6 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
         unexpected_events=[note],
     )
 
-
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)
@@ -65,11 +64,16 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
         minimum_wait_page_load_time=2.0,
         wait_for_network_idle_page_load_time=3.0,
         wait_between_actions=1.0,
+        headless=False,
+        disable_security=True,
+        cross_origin_iframes=True,
+        paint_order_filtering=False,
     )
 
     agent = BrowserAgent(
         task=task,
         llm=llm,
+        browser=browser,
         use_vision=True,
         output_model_schema=BrowsingResult,
     )
