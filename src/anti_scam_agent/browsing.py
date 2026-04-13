@@ -64,6 +64,7 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     agent = BrowserAgent(
         task=task,
         llm=llm,
+        use_vision=True,
         output_model_schema=BrowsingResult,
     )
 
