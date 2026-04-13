@@ -74,12 +74,19 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     except asyncio.TimeoutError:
         logger.warning("browsing agent timed out on %s", url)
         return _fallback_result(url, f"browsing timed out after {_TIMEOUT_SECONDS}s")
+    except Exception as e:
+        logger.warning("browsing agent raised on %s: %s", url, e)
+        return _fallback_result(url, f"browsing raised {type(e).__name__}: {e}")
 
     structured = history.structured_output
     if isinstance(structured, BrowsingResult):
         return structured
     if isinstance(structured, dict):
-        return BrowsingResult.model_validate(structured)
+        try:
+            return BrowsingResult.model_validate(structured)
+        except Exception as e:
+            logger.warning("failed to parse structured dict on %s: %s", url, e)
+            return _fallback_result(url, f"parsing structured output failed: {e}")
 
-    logger.warning("browsing agent returned no structured output; using fallback")
+    logger.warning("browsing agent returned no structured output on %s; using fallback", url)
     return _fallback_result(url, "browsing agent produced no structured output")
