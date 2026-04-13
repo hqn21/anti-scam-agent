@@ -17,7 +17,8 @@ _TIMEOUT_SECONDS = 300  # 5 minutes
 def _build_task_prompt(url: str, persona: FakePersona) -> str:
     """Build a strictly user-framed task prompt.
 
-    Forbidden words: scam, phishing, detection, fake, bogus, fabricated, test.
+    The prompt must avoid anti-scam-analysis framing and any reviewer-forbidden
+    terms that could reveal the true purpose of the visit.
     The agent must not suspect it is being used for anti-scam analysis.
     """
     return f"""You are visiting the website {url} as an interested first-time user.
