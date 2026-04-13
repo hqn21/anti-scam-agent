@@ -1,13 +1,8 @@
-from agents import Agent, Runner, function_tool
+from agents import Agent, Runner
 from dotenv import load_dotenv
 
 from anti_scam_agent.models import BrowsingResult, ScamAssessment
-from anti_scam_agent.tools import _get_domain_info
-
-# Re-wrap without defer_loading so it works with the Responses API (gpt-4.1).
-# The deferred version in handler.py requires ToolSearchTool(), which is only
-# needed when mixing deferred tools with ToolSearchTool in a single agent.
-_get_domain_info_tool = function_tool(_get_domain_info)
+from anti_scam_agent.tools import get_domain_info
 
 load_dotenv()
 
@@ -35,7 +30,7 @@ async def run_analysis_agent(browsing_result: BrowsingResult, domain: str) -> Sc
     agent = Agent(
         name="AnalysisAgent",
         instructions=_SYSTEM_PROMPT,
-        tools=[_get_domain_info_tool],
+        tools=[get_domain_info],
         output_type=ScamAssessment,
         model="gpt-4.1",
     )
