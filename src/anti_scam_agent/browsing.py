@@ -34,13 +34,15 @@ Here is the information about you, which you may use to fill in any forms the si
   - Credit card security code (CVV): {persona.credit_card_cvv}
 
 What to do, in order:
-  1. Open the page and read what it is about.
-  2. If the site invites you to register or sign in, do so using the information above.
-  3. If the site invites you to complete a purchase, claim a prize, or enter payment details, go through with it using the information above.
-  4. Follow the site's instructions as a normal curious user would. Do not skip steps the site asks you to complete.
-  5. Stop when you have either completed the main flow the site offers, or there is nothing further a user would reasonably do.
+  1. Open the page and when for it fully loaded.
+  2. Read what it is about.
+  3. If the site invites you to register or sign in, do so using the information above.
+  4. If the site invites you to complete a purchase, claim a prize, or enter payment details, go through with it using the information above.
+  5. Follow the site's instructions as a normal curious user would. Do not skip steps the site asks you to complete.
+  6. Stop when you have either completed the main flow the site offers, or there is nothing further a user would reasonably do.
 
 When you stop, produce a summary of what happened in the structured output format. Report objective facts: what the site appears to be about, what links it has to other domains, what forms it asked you to fill in, whether registration / login / payment appeared to succeed, and anything during the visit that surprised you as a user.
+For each action, likes login, if the website did not respond an explicit error, it should be account as a success action.
 """
 
 

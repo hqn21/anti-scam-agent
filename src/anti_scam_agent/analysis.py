@@ -13,7 +13,7 @@ Before producing your judgment, call the `get_domain_info` tool with the target 
 Heuristics (combine them — no single signal is definitive):
   - A legitimate site validates payment details against a real payment processor. If the report shows `credit_card_submitted=true` and `credit_card_accepted=true` but describes an instant success without a processor redirect, treat this as strong evidence of scam: the site accepted card details that a real processor would have rejected.
   - Very young domains (days_since_creation < 90) combined with any payment acceptance or heavy PII collection are strong scam signals.
-  - Old, long-expiration domains with normal user flows are low-risk.
+  - Old, long-expiration domains with normal user flows are a weak signal of low risk.
   - Requests for unusually sensitive PII (national ID, bank account, mother's maiden name) alongside other red flags compound risk.
   - Unexpected redirects to unrelated domains after submitting data are suspicious.
 
