@@ -1,3 +1,5 @@
+import logging
+
 from agents import Agent, Runner
 from dotenv import load_dotenv
 
@@ -5,6 +7,8 @@ from anti_scam_agent.models import BrowsingResult, ScamAssessment
 from anti_scam_agent.tools import get_domain_info
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """You are a fraud analyst. You are given a structured report from a colleague who visited a target website as an ordinary user, plus the site's domain. Your job is to judge whether the site is a scam / phishing operation, with reasoning.
 
@@ -41,4 +45,10 @@ async def run_analysis_agent(browsing_result: BrowsingResult, domain: str) -> Sc
     )
 
     result = await Runner.run(agent, input=user_message)
+    u = result.context_wrapper.usage
+    logger.info(f"Requests     : {u.requests}")
+    logger.info(f"Input tokens : {u.input_tokens}")
+    logger.info(f"Cached tokens: {u.input_tokens_details.cached_tokens}")
+    logger.info(f"Output tokens: {u.output_tokens}")
+    logger.info(f"Total tokens : {u.total_tokens}")
     return result.final_output_as(ScamAssessment)
