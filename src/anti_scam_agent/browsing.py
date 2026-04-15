@@ -85,6 +85,8 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
             agent.run(max_steps=_MAX_STEPS),
             timeout=_TIMEOUT_SECONDS,
         )
+        summary = await agent.token_cost_service.get_usage_summary()
+        logger.info(summary)
     except asyncio.TimeoutError:
         logger.warning("browsing agent timed out on %s", url)
         return _fallback_result(url, f"browsing timed out after {_TIMEOUT_SECONDS}s")
