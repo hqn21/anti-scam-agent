@@ -8,10 +8,10 @@ description = "Anti-Spam Agent is a multi-agent system that uses LLMs to imperso
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "browser-use>=0.11.13",
-    "faker>=30.0.0",
-    "openai-agents>=0.13.6",
-    "pydantic>=2.12.5",
+    "browser-use",
+    "faker>=40.19.1",
+    "openai-agents>=0.17.4",
+    "pydantic==2.12.5",
     "python-dotenv>=1.2.2",
     "python-whois>=0.9.6",
 ]
@@ -33,3 +33,6 @@ packages = ["src/anti_scam_agent"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[tool.uv.sources]
+browser-use = { git = "https://github.com/hqn21/browser-use.git", rev = "fix/update-openai-pin-for-downstream-compatibility" }
