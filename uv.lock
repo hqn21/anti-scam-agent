@@ -227,8 +227,8 @@ wheels = [
 
 [[package]]
 name = "browser-use"
-version = "0.12.9"
-source = { git = "https://github.com/hqn21/browser-use.git?rev=fix%2Fupdate-openai-pin-for-downstream-compatibility#bee24e0a06aad81ab98ce8c55bdbf900d26eb55c" }
+version = "0.13.1"
+source = { git = "https://github.com/hqn21/browser-use.git?rev=fix%2Fupdate-openai-pin-for-downstream-compatibility#d75f8c88e1f0e6e19803f89504967b740f2844a1" }
 dependencies = [
     { name = "aiohttp" },
     { name = "anthropic" },
