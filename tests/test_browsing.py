@@ -73,6 +73,15 @@ def test_prompt_handles_stale_element_indices():
     assert "currently listed" in low
 
 
+def test_prompt_offers_text_based_click_fallback():
+    # When index-clicking a visible button keeps missing, fall back to find_text /
+    # evaluate (JS click by visible text) which bypass the unreliable numbering.
+    prompt = _build_task_prompt("http://example.com", _persona())
+    assert "find_text" in prompt
+    assert "evaluate" in prompt
+    assert ".click()" in prompt
+
+
 def test_prompt_waits_for_lazy_lists_to_settle():
     low = _build_task_prompt("http://example.com", _persona()).lower()
     assert "scroll all the way down" in low
