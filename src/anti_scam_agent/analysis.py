@@ -1,5 +1,4 @@
 import logging
-from typing import Literal
 
 from agents import Agent, Runner
 from dotenv import load_dotenv
@@ -60,7 +59,6 @@ Return a ScamAssessment:
 async def run_analysis_agent(
     browsing_result: BrowsingResult,
     domain: str,
-    card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None,
     static_signals: StaticSignals | None = None,
 ) -> ScamAssessment:
     agent = Agent(
@@ -76,8 +74,7 @@ async def run_analysis_agent(
         else "null"
     )
     user_message = (
-        f"Target domain: {domain}\n"
-        f"Card tier: {card_tier if card_tier is not None else 'null (no acceptance observed)'}\n\n"
+        f"Target domain: {domain}\n\n"
         f"Static signals (JSON):\n{static_json}\n\n"
         f"Browsing report (JSON):\n{browsing_result.model_dump_json(indent=2)}"
     )

@@ -43,14 +43,9 @@ def _luhn_ok(number: str) -> bool:
     return checksum % 10 == 0
 
 
-def test_primary_card_is_luhn_invalid():
+def test_card_is_luhn_valid():
     persona = generate_persona()
-    assert not _luhn_ok(persona.credit_card_number), persona.credit_card_number
-
-
-def test_fallback_card_is_luhn_valid():
-    persona = generate_persona()
-    assert _luhn_ok(persona.credit_card_number_luhn_valid), persona.credit_card_number_luhn_valid
+    assert _luhn_ok(persona.credit_card_number), persona.credit_card_number
 
 
 def test_phone_has_no_extension():
@@ -62,7 +57,7 @@ def test_cvv_length_matches_card_type():
     # Amex cards (start with 34 or 37) use a 4-digit CVV; others use 3.
     for _ in range(40):
         persona = generate_persona()
-        valid_digits = re.sub(r"\D", "", persona.credit_card_number_luhn_valid)
+        valid_digits = re.sub(r"\D", "", persona.credit_card_number)
         is_amex = valid_digits[:2] in {"34", "37"}
         expected = 4 if is_amex else 3
         assert len(persona.credit_card_cvv) == expected, (
@@ -83,7 +78,7 @@ def test_phone_is_taiwan_mobile():
 
 def test_email_is_ascii_example_address():
     # The Chinese name cannot be an email local-part, so the address is a
-    # romanized ASCII handle. (Bucket 3 will swap this for an AgentMail inbox.)
+    # romanized ASCII handle. (The pipeline swaps this for an AgentMail inbox.)
     persona = generate_persona()
     assert persona.email.isascii(), persona.email
     assert persona.email.endswith("@example.com"), persona.email
@@ -91,6 +86,6 @@ def test_email_is_ascii_example_address():
 
 def test_card_type_mix_is_localized():
     # JCB (common in Taiwan) should appear; Discover (rare in TW) should not.
-    prefixes = {re.sub(r"\D", "", generate_persona().credit_card_number_luhn_valid)[:2] for _ in range(80)}
+    prefixes = {re.sub(r"\D", "", generate_persona().credit_card_number)[:2] for _ in range(80)}
     assert "35" in prefixes, f"expected a JCB (prefix 35) in {prefixes}"
     assert "60" not in prefixes and "65" not in prefixes, f"unexpected Discover prefix in {prefixes}"
