@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from urllib.parse import urlparse
 
 from anti_scam_agent.analysis import run_analysis_agent
@@ -8,8 +7,6 @@ from anti_scam_agent.email_evidence import make_client, pick_inbox
 from anti_scam_agent.models import ScamAssessment
 from anti_scam_agent.persona import generate_persona
 from anti_scam_agent.signals import collect_static_signals
-
-logger = logging.getLogger(__name__)
 
 
 def _extract_domain(url: str) -> str:

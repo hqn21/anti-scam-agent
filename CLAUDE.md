@@ -28,7 +28,7 @@ This project uses `uv` (Python >=3.12).
 - Run all tests: `uv run pytest`
 - Run a single test with output: `uv run pytest tests/test_tools.py::test_get_domain_info -s`
 
-Runtime requires `OPENAI_API_KEY` in `.env` (see `.env.example`); both `browser-use` and `openai-agents` read it via `load_dotenv()`. `browser-use` is pinned to a fork (see `[tool.uv.sources]` in `pyproject.toml`) for OpenAI-pin compatibility.
+Runtime requires `OPENAI_API_KEY` **and** `AGENTMAIL_API_KEY` in `.env` (see `.env.example`); both `browser-use` and `openai-agents` read the OpenAI key via `load_dotenv()`, and `make_client()` raises if the AgentMail key is missing. `browser-use` is pinned to a fork (see `[tool.uv.sources]` in `pyproject.toml`) for OpenAI-pin compatibility.
 
 Models are hardcoded per agent: browsing uses `gpt-4.1-mini`, analysis uses `gpt-4.1`.
 
