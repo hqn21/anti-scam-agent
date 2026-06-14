@@ -80,3 +80,11 @@ def test_non_failure_payment_does_not_trigger_second_run(monkeypatch, payment):
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["browse"] == 1
     assert calls["card_tier"] is None
+
+
+@pytest.mark.parametrize("second", [Outcome.failed, Outcome.unclear, Outcome.not_attempted])
+def test_second_run_without_success_leaves_card_tier_none(monkeypatch, second):
+    calls = _patch(monkeypatch, [Outcome.failed, second])
+    asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert calls["browse"] == 2
+    assert calls["card_tier"] is None
