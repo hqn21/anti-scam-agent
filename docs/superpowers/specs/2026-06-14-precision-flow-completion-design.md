@@ -195,11 +195,17 @@ URL
 
 ## WS4 wiring decision (resolved)
 
-Verified against the installed `browser-use==0.13.1` (the pinned fork). Framework
-dependency injection via the `context` special param is **not usable** here: although
-`context` is listed in the registry's special-param type map, `execute_action` never
-populates a `context` key in its `special_context` dict, and `Agent.__init__` exposes
-no `context` argument — the hook is an unwired stub in this version.
+Verified empirically against the installed build (a pinned fork — `direct_url.json`
+shows `github.com/hqn21/browser-use.git`, branch
+`fix/update-openai-pin-for-downstream-compatibility`, commit `d75f8c8`, reporting
+version 0.13.1; not the upstream PyPI release). Framework dependency injection via the
+`context` special param is **not usable** here: `context` is recognized as a special
+param (it is stripped from the LLM-facing schema), but its value is never plumbed —
+`execute_action` builds no `context` key in `special_context`, and neither `Tools`,
+`Registry`, nor `Agent` accepts a context value. Declaring a `context` param and
+letting the framework invoke the action raises at execution:
+`ValueError: <action>() missing required special parameter 'context'`. The hook is an
+unwired stub in this fork.
 
 We therefore use **closure capture**: `run_browsing_agent` builds a `Tools()` instance
 locally and defines the `read_email_inbox` action inside it, closing over the `client`
