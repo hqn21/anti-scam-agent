@@ -11,6 +11,11 @@ class FakePersona(BaseModel):
     credit_card_number: str
     credit_card_expiry: str
     credit_card_cvv: str
+    # The same person's international-facing details, for foreign / English-only
+    # forms that won't accept Chinese characters or a local phone format.
+    name_international: str
+    phone_international: str
+    address_international: str
 
 class Outcome(str, Enum):
     not_attempted = "not_attempted"
