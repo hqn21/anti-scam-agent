@@ -44,3 +44,22 @@ def test_fallback_marks_visit_incomplete():
     assert result.visit_completed is False
     assert result.login_outcome is Outcome.not_attempted
     assert result.payment_outcome is Outcome.not_attempted
+
+
+from anti_scam_agent.browsing import _external_links
+
+
+def test_external_links_keeps_only_other_hosts():
+    urls = [
+        "http://shop.test/",
+        "http://shop.test/cart",
+        "https://www.shop.test/pay",  # same host (www stripped)
+        "https://checkout.stripe.com/session",
+        None,
+        "https://checkout.stripe.com/session",  # duplicate
+    ]
+    assert _external_links(urls, "http://shop.test") == ["checkout.stripe.com"]
+
+
+def test_external_links_empty_when_no_navigation():
+    assert _external_links([None, "http://shop.test/"], "http://shop.test") == []
