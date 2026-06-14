@@ -16,8 +16,11 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_MAX_STEPS = 40
-_TIMEOUT_SECONDS = 300  # 5 minutes
+_MAX_STEPS = 70
+_TIMEOUT_SECONDS = 480  # 8 minutes
+# One action per step: the DOM (and its click indices) is re-serialized before every
+# action, so a click can never fire against a stale index from before the page changed.
+_MAX_ACTIONS_PER_STEP = 1
 
 
 def _build_task_prompt(url: str, persona: FakePersona) -> str:
@@ -125,7 +128,9 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         headless=False,
         disable_security=True,
         cross_origin_iframes=True,
-        paint_order_filtering=False,
+        # paint_order_filtering left at its default (True): drop visually-occluded
+        # elements so a covered/duplicate button with the same label isn't indexed
+        # and mis-clicked.
     )
 
     agent = BrowserAgent(
@@ -135,6 +140,7 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         use_vision=True,
         output_model_schema=BrowsingResult,
         tools=_build_email_tools(client, inbox),
+        max_actions_per_step=_MAX_ACTIONS_PER_STEP,
     )
 
     try:
