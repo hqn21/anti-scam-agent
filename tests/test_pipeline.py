@@ -3,7 +3,6 @@ import asyncio
 import pytest
 
 import anti_scam_agent.pipeline as pipeline
-from anti_scam_agent.email_evidence import EmailEvidence
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome, ScamAssessment
 from anti_scam_agent.signals import StaticSignals
 
@@ -29,8 +28,8 @@ def _assessment() -> ScamAssessment:
 
 
 def _patch(monkeypatch, payment_sequence):
-    """Stub browsing, analysis, static + email signals; capture args."""
-    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None, "email": None, "persona_email": None}
+    """Stub browsing, analysis, static signals; capture args."""
+    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None, "persona_email": None}
 
     async def fake_browse(url, persona):
         calls["cards"].append(persona.credit_card_number)
@@ -39,16 +38,16 @@ def _patch(monkeypatch, payment_sequence):
         calls["browse"] += 1
         return _result(payment)
 
-    async def fake_analyze(result, domain, card_tier, static_signals, email_evidence):
+    async def fake_analyze(result, domain, card_tier, static_signals):
         calls["card_tier"] = card_tier
         calls["static"] = static_signals
-        calls["email"] = email_evidence
         return _assessment()
 
     monkeypatch.setattr(pipeline, "run_browsing_agent", fake_browse)
     monkeypatch.setattr(pipeline, "run_analysis_agent", fake_analyze)
     monkeypatch.setattr(pipeline, "collect_static_signals", lambda url: StaticSignals(target_host="shop.test"))
-    monkeypatch.setattr(pipeline, "make_client", lambda: None)  # email disabled by default in tests
+    monkeypatch.setattr(pipeline, "make_client", lambda: object())
+    monkeypatch.setattr(pipeline, "pick_inbox", lambda: "asalpha@agentmail.to")
     return calls
 
 
@@ -104,31 +103,18 @@ def test_static_signals_passed_to_analysis(monkeypatch):
     assert calls["static"].target_host == "shop.test"
 
 
-def test_email_evidence_collected_when_configured(monkeypatch):
+def test_pipeline_requires_agentmail(monkeypatch):
+    _patch(monkeypatch, [Outcome.unclear])
+
+    def boom():
+        raise RuntimeError("AGENTMAIL_API_KEY is required")
+
+    monkeypatch.setattr(pipeline, "make_client", boom)
+    with pytest.raises(RuntimeError):
+        asyncio.run(pipeline.run_pipeline("http://shop.test"))
+
+
+def test_persona_email_routed_through_inbox(monkeypatch):
     calls = _patch(monkeypatch, [Outcome.unclear])
-    monkeypatch.setattr(pipeline, "make_client", lambda: object())
-    monkeypatch.setattr(pipeline, "pick_inbox", lambda: "asalpha@agentmail.to")
-    monkeypatch.setattr(
-        pipeline, "collect_email_evidence",
-        lambda client, inbox, target, since, poll_seconds: EmailEvidence(polled=True, from_target_domain=True, authenticated=True),
-    )
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["persona_email"] == "asalpha@agentmail.to"
-    assert isinstance(calls["email"], EmailEvidence)
-    assert calls["email"].from_target_domain is True
-
-
-def test_email_skipped_when_unconfigured(monkeypatch):
-    calls = _patch(monkeypatch, [Outcome.unclear])
-    asyncio.run(pipeline.run_pipeline("http://shop.test"))
-    assert calls["email"] is None
-
-
-def test_poll_seconds_defaults_on_bad_env(monkeypatch):
-    monkeypatch.setenv("AGENTMAIL_POLL_SECONDS", "not-a-number")
-    assert pipeline._poll_seconds() == 120
-
-
-def test_poll_seconds_reads_valid_env(monkeypatch):
-    monkeypatch.setenv("AGENTMAIL_POLL_SECONDS", "30")
-    assert pipeline._poll_seconds() == 30

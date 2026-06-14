@@ -43,13 +43,8 @@ def test_run_analysis_agent_accepts_static_signals():
     assert "static_signals" in params
 
 
-def test_run_analysis_agent_accepts_email_evidence():
-    params = inspect.signature(run_analysis_agent).parameters
-    assert "email_evidence" in params
-
-
-def _run(result: BrowsingResult, domain: str, card_tier: str | None = None, static_signals=None, email_evidence=None) -> ScamAssessment:
-    return asyncio.run(run_analysis_agent(result, domain, card_tier, static_signals, email_evidence))
+def _run(result: BrowsingResult, domain: str, card_tier: str | None = None, static_signals=None) -> ScamAssessment:
+    return asyncio.run(run_analysis_agent(result, domain, card_tier, static_signals))
 
 
 def test_analysis_agent_returns_assessment_for_scam_fixture():

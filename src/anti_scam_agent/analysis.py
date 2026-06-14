@@ -4,7 +4,6 @@ from typing import Literal
 from agents import Agent, Runner
 from dotenv import load_dotenv
 
-from anti_scam_agent.email_evidence import EmailEvidence
 from anti_scam_agent.models import BrowsingResult, ScamAssessment
 from anti_scam_agent.signals import StaticSignals
 
@@ -63,7 +62,6 @@ async def run_analysis_agent(
     domain: str,
     card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None,
     static_signals: StaticSignals | None = None,
-    email_evidence: EmailEvidence | None = None,
 ) -> ScamAssessment:
     agent = Agent(
         name="AnalysisAgent",
@@ -77,12 +75,10 @@ async def run_analysis_agent(
         if static_signals is not None
         else "null"
     )
-    email_json = email_evidence.model_dump_json(indent=2) if email_evidence is not None else "null"
     user_message = (
         f"Target domain: {domain}\n"
         f"Card tier: {card_tier if card_tier is not None else 'null (no acceptance observed)'}\n\n"
         f"Static signals (JSON):\n{static_json}\n\n"
-        f"Email evidence (JSON):\n{email_json}\n\n"
         f"Browsing report (JSON):\n{browsing_result.model_dump_json(indent=2)}"
     )
 
