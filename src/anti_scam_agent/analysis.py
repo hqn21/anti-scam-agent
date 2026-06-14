@@ -28,18 +28,18 @@ Static signals (any field may be null when a lookup failed — treat null as 'un
   - tls: issuer_org, age_days, san_count, is_free_dv (a free domain-validated certificate, e.g. Let's Encrypt/ZeroSSL).
   - dns: has_mx (does the domain accept mail?), nameservers.
 
-Email evidence (from an inbox used as the registration email; may be null when AgentMail was not configured):
+Email evidence (from an inbox used as the registration email; the whole block may be null when AgentMail was not configured — treat a null block identically to polled=false: email was simply not checked, which is not evidence either way):
   - polled: whether the inbox was actually checked.
   - message_count: how many emails arrived after the visit (a large spam influx can itself hint the data was resold).
   - from_target_domain: whether mail arrived whose sender domain matches the target.
-  - authenticated: whether such matching mail passed SPF/DKIM/DMARC.
+  - authenticated: whether such matching mail passed SPF/DKIM/DMARC; null when from_target_domain is false (there was no domain-matching mail to authenticate, not 'unknown').
 
 Heuristics (combine them — no single signal is definitive):
   - 'luhn_invalid' acceptance = strong evidence; 'luhn_valid' acceptance = moderate evidence.
   - Very young domains (days_since_creation < 90) combined with any payment acceptance or heavy PII collection are strong scam signals.
   - A young domain + a brand-new free DV certificate + no MX record is a classic throwaway-scam fingerprint; together they compound risk, though none alone is conclusive.
   - has_mx=false is a weak negative signal (a real merchant usually has company mail); has_mx=true is mild reassurance. Never decisive alone.
-  - A genuine transactional email — from_target_domain=true AND authenticated=true — is STRONG evidence the site is a real operation (it runs an authenticated mail system). Let it rescue an otherwise-young/uncertain site from a scam verdict; this is the most reliable exoneration signal available.
+  - A genuine transactional email — from_target_domain=true AND authenticated=true — is STRONG evidence the site is a real operation (it runs an authenticated mail system). Let it rescue a site whose only red flag is a young domain or thin/uncertain signals; it is the most reliable exoneration available for THAT case. It does NOT override observed payment fraud: if payment_outcome=succeeded (especially with card_tier=luhn_invalid), authenticated mail cannot rescue the site — a real operation does not accept an invalid card.
   - No email (from_target_domain=false) is only a WEAK negative signal — many legitimate sites do not send mail, and email may have been skipped (polled=false). Never treat absence of email as scam evidence on its own.
   - If the visit stalled because the site demanded email verification (see the browsing report), lean toward legitimate — scam sites almost never run real verification.
   - privacy_protected and free DV certs are common on legitimate sites too — only let them compound an already-young or payment-positive case.
