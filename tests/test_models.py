@@ -42,3 +42,11 @@ def test_browsing_result_uses_four_state_outcomes():
     # The "was it tried at all" booleans are retained.
     assert "login_attempted" in fields
     assert "credit_card_submitted" in fields
+
+
+def test_browsing_result_has_payment_explicitly_declined():
+    fields = BrowsingResult.model_fields
+    assert "payment_explicitly_declined" in fields
+    assert fields["payment_explicitly_declined"].annotation is bool
+    # default must be the safe/neutral False
+    assert fields["payment_explicitly_declined"].default is False
