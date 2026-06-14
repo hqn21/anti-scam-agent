@@ -55,6 +55,7 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
         login_outcome=Outcome.not_attempted,
         credit_card_submitted=False,
         payment_outcome=Outcome.not_attempted,
+        payment_explicitly_declined=False,
         form_fields_requested=[],
         unexpected_events=[note],
         visit_completed=False,
