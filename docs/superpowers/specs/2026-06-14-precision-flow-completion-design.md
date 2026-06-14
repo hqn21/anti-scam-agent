@@ -193,11 +193,21 @@ URL
   `read_email_inbox` action's failure-tolerance (with a fake client).
 - `test_pipeline` updated for mandatory AgentMail and reduced analysis args.
 
+## WS4 wiring decision (resolved)
+
+Verified against the installed `browser-use==0.13.1` (the pinned fork). Framework
+dependency injection via the `context` special param is **not usable** here: although
+`context` is listed in the registry's special-param type map, `execute_action` never
+populates a `context` key in its `special_context` dict, and `Agent.__init__` exposes
+no `context` argument — the hook is an unwired stub in this version.
+
+We therefore use **closure capture**: `run_browsing_agent` builds a `Tools()` instance
+locally and defines the `read_email_inbox` action inside it, closing over the `client`
+and `inbox` locals. Smoke-tested: the action registers, its LLM-facing parameter schema
+is empty (no `client`/`inbox` leak — the blind invariant holds), and the closed-over
+inbox read works. The custom `Tools` instance is passed to `BrowserAgent(tools=...)`.
+
 ## Open risks
 
-- browser-use custom-action API on the pinned fork must support an async action with
-  injected dependencies (client + inbox). Verify against the installed version
-  before finalizing WS4; fall back to a closure-captured read-callable if the
-  decorator injection differs.
 - Raising on missing AgentMail key means every offline test that constructs the
   pipeline must provide a dummy key or stub `make_client`.
