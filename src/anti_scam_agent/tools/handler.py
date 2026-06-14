@@ -36,7 +36,7 @@ def _first(value: Any) -> Any:
 def _looks_privacy_protected(raw: dict) -> bool:
     org = _first(raw.get("org"))
     name = _first(raw.get("name"))
-    if org is None and name is None:
+    if not (org or "").strip() and not (name or "").strip():
         return True
     blob = " ".join(str(v).lower() for v in (org, name) if v is not None)
     return any(marker in blob for marker in _PRIVACY_MARKERS)

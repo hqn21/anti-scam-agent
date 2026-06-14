@@ -53,7 +53,7 @@ def _tls_info_from_cert(cert: dict, now: datetime | None = None) -> TlsInfo:
     return TlsInfo(issuer_org=issuer_org, age_days=age_days, san_count=san_count, is_free_dv=is_free_dv)
 
 
-def _get_tls_info(host: str) -> TlsInfo | None:
+def _get_tls_info(host: str) -> TlsInfo:
     ctx = ssl.create_default_context()
     with socket.create_connection((host, 443), timeout=_TIMEOUT) as sock:
         with ctx.wrap_socket(sock, server_hostname=host) as ssock:

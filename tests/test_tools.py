@@ -1,16 +1,14 @@
-from anti_scam_agent.tools import *
+import datetime
 import json
+
+from anti_scam_agent.tools import DomainInfo, _domain_info_from_whois, _get_domain_info
+
 
 def test_get_domain_info():
     result = _get_domain_info("haoquan.me")
     print(json.dumps(result.__dict__, indent=2, ensure_ascii=False))
     result = _get_domain_info("example.com")
     print(json.dumps(result.__dict__, indent=2, ensure_ascii=False))
-
-
-import datetime
-
-from anti_scam_agent.tools.handler import _domain_info_from_whois, DomainInfo
 
 
 def _raw(**overrides):
@@ -50,6 +48,11 @@ def test_domain_info_builder_handles_list_domain_name():
 
 def test_domain_info_builder_both_none_is_privacy():
     info = _domain_info_from_whois(_raw(org=None, name=None), "example.com")
+    assert info.privacy_protected is True
+
+
+def test_domain_info_builder_empty_strings_are_privacy():
+    info = _domain_info_from_whois(_raw(org="", name=""), "example.com")
     assert info.privacy_protected is True
 
 

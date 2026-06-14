@@ -21,7 +21,7 @@ class Outcome(str, Enum):
 
 class BrowsingResult(BaseModel):
     website_summary: Annotated[str, Field(description="A concise summary of the website's apparent purpose and content.")]
-    outgoing_links: Annotated[list[str], Field(description="External links (different domain) discovered on the site.")]
+    outgoing_links: Annotated[list[str], Field(description="External hostnames the browser navigated to during the visit (different from the target domain).")]
     login_attempted: Annotated[bool, Field(description="Whether a login or registration flow was attempted.")]
     login_outcome: Annotated[Outcome, Field(default=Outcome.not_attempted, description="The result of the login or registration: 'succeeded' only if an explicit confirmation appeared, 'failed' if it was explicitly rejected, 'unclear' if there was no clear response, 'not_attempted' if it was never tried.")]
     credit_card_submitted: Annotated[bool, Field(description="Whether credit card information was submitted to the site.")]
