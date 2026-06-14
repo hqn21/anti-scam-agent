@@ -65,6 +65,9 @@ def test_system_prompt_encodes_explicit_decline_rule():
     assert "payment_explicitly_declined" in p
     # the rule's core reasoning is actually present, not just the field name
     assert "no real processor" in p
+    # a hang/stall after submitting the card is treated as a signal, not abstained away
+    assert "hung" in p or "stall" in p
+    assert "credit_card_submitted is true" in p
     # the old framings are gone
     assert "luhn_invalid" not in p
     assert "card tier" not in p

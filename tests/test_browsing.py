@@ -1,7 +1,13 @@
 import asyncio
 from types import SimpleNamespace
 
-from anti_scam_agent.browsing import _build_email_tools, _build_task_prompt, _external_links, _fallback_result
+from anti_scam_agent.browsing import (
+    _build_email_tools,
+    _build_task_prompt,
+    _card_was_entered,
+    _external_links,
+    _salvage_result_from_history,
+)
 from anti_scam_agent.models import FakePersona, Outcome
 
 
@@ -68,11 +74,62 @@ def test_prompt_offers_international_identity():
     assert "+886 912-345678" in prompt
 
 
-def test_fallback_marks_visit_incomplete():
-    result = _fallback_result("http://example.com", "boom")
+class _FakeHistory:
+    def __init__(self, actions, urls):
+        self._actions = actions
+        self._urls = urls
+
+    def model_actions(self):
+        return self._actions
+
+    def urls(self):
+        return self._urls
+
+
+def test_card_was_entered_matches_despite_formatting():
+    actions = [{"input_text": {"index": 5, "text": "4111-1111 1111 1111"}}]
+    assert _card_was_entered(actions, "4111111111111111") is True
+    assert _card_was_entered([{"click": {"index": 2}}], "4111111111111111") is False
+
+
+def test_salvage_zero_evidence_history_marks_incomplete_no_payment():
+    # Nothing useful happened — behaves like the old blank fallback.
+    result = _salvage_result_from_history(_FakeHistory([], []), "http://example.com", _persona(), "boom")
     assert result.visit_completed is False
-    assert result.login_outcome is Outcome.not_attempted
+    assert result.credit_card_submitted is False
     assert result.payment_outcome is Outcome.not_attempted
+    assert result.login_outcome is Outcome.not_attempted
+    assert result.unexpected_events == ["boom"]
+
+
+def test_salvage_preserves_submitted_card_on_hang():
+    # The card was entered, then the run stalled/timed out: must NOT be reported as
+    # 'no payment attempted'. credit_card_submitted=True + unclear + not declined.
+    actions = [{"input_text": {"index": 9, "text": "4111111111111111"}}]
+    urls = ["https://shop.test/checkout", "https://pay.unrelated.test/spin"]
+    result = _salvage_result_from_history(
+        _FakeHistory(actions, urls), "http://shop.test", _persona(), "browsing timed out after 480s"
+    )
+    assert result.credit_card_submitted is True
+    assert result.payment_outcome is Outcome.unclear
+    assert result.payment_explicitly_declined is False
+    assert result.visit_completed is False
+    assert any("stall" in e.lower() or "loading" in e.lower() for e in result.unexpected_events)
+    assert "pay.unrelated.test" in result.outgoing_links
+
+
+def test_salvage_tolerates_broken_history():
+    # A history whose accessors raise must still yield a usable result, never raise.
+    class Broken:
+        def model_actions(self):
+            raise RuntimeError("boom")
+
+        def urls(self):
+            raise RuntimeError("boom")
+
+    result = _salvage_result_from_history(Broken(), "http://example.com", _persona(), "browsing raised X")
+    assert result.visit_completed is False
+    assert result.credit_card_submitted is False
 
 
 def test_external_links_keeps_only_other_hosts():
