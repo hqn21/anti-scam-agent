@@ -122,3 +122,13 @@ def test_email_skipped_when_unconfigured(monkeypatch):
     calls = _patch(monkeypatch, [Outcome.unclear])
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["email"] is None
+
+
+def test_poll_seconds_defaults_on_bad_env(monkeypatch):
+    monkeypatch.setenv("AGENTMAIL_POLL_SECONDS", "not-a-number")
+    assert pipeline._poll_seconds() == 120
+
+
+def test_poll_seconds_reads_valid_env(monkeypatch):
+    monkeypatch.setenv("AGENTMAIL_POLL_SECONDS", "30")
+    assert pipeline._poll_seconds() == 30

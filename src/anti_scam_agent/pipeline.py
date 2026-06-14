@@ -67,6 +67,7 @@ async def run_pipeline(url: str) -> ScamAssessment:
     static_task = asyncio.to_thread(collect_static_signals, url)
     email_evidence: EmailEvidence | None = None
     if client is not None:
+        assert inbox is not None  # set above whenever client is not None
         static_signals, email_evidence = await asyncio.gather(
             static_task,
             asyncio.to_thread(collect_email_evidence, client, inbox, domain, since, _poll_seconds()),
