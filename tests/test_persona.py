@@ -89,3 +89,27 @@ def test_card_type_mix_is_localized():
     prefixes = {re.sub(r"\D", "", generate_persona().credit_card_number)[:2] for _ in range(80)}
     assert "35" in prefixes, f"expected a JCB (prefix 35) in {prefixes}"
     assert "60" not in prefixes and "65" not in prefixes, f"unexpected Discover prefix in {prefixes}"
+
+
+def test_international_name_is_romanized_ascii():
+    # The international name is a Latin-script romanization a foreign form will accept.
+    persona = generate_persona()
+    assert persona.name_international.isascii(), persona.name_international
+    assert persona.name_international.strip(), persona.name_international
+    # the local name is Han characters; the international one must not be the same string
+    assert persona.name_international != persona.name
+
+
+def test_international_phone_is_taiwan_e164():
+    persona = generate_persona()
+    assert persona.phone_international.startswith("+886 "), persona.phone_international
+    national = persona.phone_international.removeprefix("+886 ")
+    # leading 0 is dropped in international format
+    assert not national.startswith("0"), persona.phone_international
+    assert re.fullmatch(r"9\d{2}-\d{6}", national), persona.phone_international
+
+
+def test_international_address_is_ascii():
+    persona = generate_persona()
+    assert persona.address_international.isascii(), persona.address_international
+    assert "\n" not in persona.address_international, persona.address_international

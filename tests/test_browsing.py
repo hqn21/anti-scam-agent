@@ -7,14 +7,17 @@ from anti_scam_agent.models import FakePersona, Outcome
 
 def _persona() -> FakePersona:
     return FakePersona(
-        name="Jane Doe",
+        name="王怡君",
         email="jane.doe11@example.com",
         password="hunter2hunter2",
-        phone="555-123-4567",
-        address="1 Main St, Springfield",
+        phone="0912-345678",
+        address="台北市中山區中山路一段1號",
         credit_card_number="4111111111111111",
         credit_card_expiry="08/30",
         credit_card_cvv="123",
+        name_international="Yijun Wang",
+        phone_international="+886 912-345678",
+        address_international="1 Main St, Springfield, IL 62701",
     )
 
 
@@ -37,6 +40,21 @@ def test_prompt_does_not_leak_card_tier_or_luhn():
     assert "luhn" not in lowered
     assert "card_tier" not in lowered
     assert "4111111111111111" in prompt  # the card the agent is given
+
+
+def test_prompt_recovers_from_stray_redirect():
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "go back" in prompt or "previous page" in prompt
+    # tied to being navigated away from the site unexpectedly
+    assert "unrelated" in prompt or "different" in prompt
+
+
+def test_prompt_offers_international_identity():
+    prompt = _build_task_prompt("http://example.com", _persona())
+    # both the local and the international identity are offered to the agent
+    assert "王怡君" in prompt
+    assert "Yijun Wang" in prompt
+    assert "+886 912-345678" in prompt
 
 
 def test_fallback_marks_visit_incomplete():
