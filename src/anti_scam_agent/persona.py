@@ -1,18 +1,20 @@
 import random
-import re
 
 from faker import Faker
 
 from anti_scam_agent.models import FakePersona
 
-_faker = Faker("en_US")
+# The evaluation set targets Taiwanese users, so the persona must look local
+# enough that a real TW site's form accepts it (keeping the control signal clean).
+_faker = Faker("zh_TW")
+
+# Card mix skewed to Taiwan: JCB is common here, Discover is rare.
+_CARD_TYPES = ["visa", "mastercard", "jcb", "amex"]
 
 
-def _email_from_name(name: str) -> str:
-    parts = [p.lower() for p in name.split() if p.isalpha()]
-    if len(parts) < 2:
-        parts = ["user", str(random.randint(1000, 9999))]
-    return f"{parts[0]}.{parts[-1]}{random.randint(10, 99)}@example.com"
+def _taiwan_mobile() -> str:
+    """A clean Taiwanese mobile number (09XX-XXXXXX) that web forms reliably accept."""
+    return f"09{random.randint(0, 99):02d}-{random.randint(0, 999999):06d}"
 
 
 def _break_luhn(number: str) -> str:
@@ -23,15 +25,16 @@ def _break_luhn(number: str) -> str:
 
 def generate_persona() -> FakePersona:
     name = _faker.name()
-    card_type = random.choice(["visa", "mastercard", "amex", "discover"])
+    card_type = random.choice(_CARD_TYPES)
     valid_card = _faker.credit_card_number(card_type=card_type)
     cvv_len = 4 if card_type == "amex" else 3
-    phone = re.split(r"x", _faker.phone_number(), flags=re.IGNORECASE)[0].strip()
     return FakePersona(
         name=name,
-        email=_email_from_name(name),
+        # The Chinese name can't be an email local-part, so use a romanized ASCII
+        # handle. (Bucket 3 will replace this with an AgentMail inbox address.)
+        email=f"{_faker.user_name()}@example.com",
         password=_faker.password(length=12),
-        phone=phone,
+        phone=_taiwan_mobile(),
         address=_faker.address().replace("\n", ", "),
         credit_card_number=_break_luhn(valid_card),
         credit_card_number_luhn_valid=valid_card,

@@ -68,3 +68,29 @@ def test_cvv_length_matches_card_type():
         assert len(persona.credit_card_cvv) == expected, (
             f"{valid_digits[:2]} -> cvv {persona.credit_card_cvv!r}"
         )
+
+
+def test_name_is_taiwanese_chinese():
+    # zh_TW personas have Han-character names, so a real TW site form accepts them.
+    persona = generate_persona()
+    assert any("一" <= ch <= "鿿" for ch in persona.name), persona.name
+
+
+def test_phone_is_taiwan_mobile():
+    persona = generate_persona()
+    assert re.fullmatch(r"09\d{2}-\d{6}", persona.phone), persona.phone
+
+
+def test_email_is_ascii_example_address():
+    # The Chinese name cannot be an email local-part, so the address is a
+    # romanized ASCII handle. (Bucket 3 will swap this for an AgentMail inbox.)
+    persona = generate_persona()
+    assert persona.email.isascii(), persona.email
+    assert persona.email.endswith("@example.com"), persona.email
+
+
+def test_card_type_mix_is_localized():
+    # JCB (common in Taiwan) should appear; Discover (rare in TW) should not.
+    prefixes = {re.sub(r"\D", "", generate_persona().credit_card_number_luhn_valid)[:2] for _ in range(80)}
+    assert "35" in prefixes, f"expected a JCB (prefix 35) in {prefixes}"
+    assert "60" not in prefixes and "65" not in prefixes, f"unexpected Discover prefix in {prefixes}"
