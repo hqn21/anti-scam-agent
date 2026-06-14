@@ -1,15 +1,16 @@
 import asyncio
+import inspect
 
 from anti_scam_agent.analysis import run_analysis_agent
-from anti_scam_agent.models import BrowsingResult, ScamAssessment
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment
 
 OBVIOUS_SCAM = BrowsingResult(
     website_summary="Site claims the user has won a lottery and asks for immediate payment of a small processing fee to release a large prize.",
     outgoing_links=["https://some-unrelated-cdn.biz"],
     login_attempted=True,
-    login_succeeded=True,
+    login_outcome=Outcome.succeeded,
     credit_card_submitted=True,
-    credit_card_accepted=True,
+    payment_outcome=Outcome.succeeded,
     form_fields_requested=[
         "full name", "national ID", "bank account number",
         "credit card number", "credit card CVV", "mother's maiden name",
@@ -24,12 +25,17 @@ OBVIOUS_LEGIT = BrowsingResult(
     website_summary="Simple placeholder domain with a short description and no interactive forms.",
     outgoing_links=["https://www.iana.org/domains/example"],
     login_attempted=False,
-    login_succeeded=False,
+    login_outcome=Outcome.not_attempted,
     credit_card_submitted=False,
-    credit_card_accepted=False,
+    payment_outcome=Outcome.not_attempted,
     form_fields_requested=[],
     unexpected_events=[],
 )
+
+
+def test_run_analysis_agent_accepts_card_tier():
+    params = inspect.signature(run_analysis_agent).parameters
+    assert "card_tier" in params
 
 
 def _run(result: BrowsingResult, domain: str) -> ScamAssessment:
