@@ -46,3 +46,21 @@ def test_domain_info_builder_detects_privacy():
 def test_domain_info_builder_handles_list_domain_name():
     info = _domain_info_from_whois(_raw(domain_name=["EXAMPLE.COM", "example.com"]), "example.com")
     assert info.domain == "example.com"
+
+
+def test_domain_info_builder_both_none_is_privacy():
+    info = _domain_info_from_whois(_raw(org=None, name=None), "example.com")
+    assert info.privacy_protected is True
+
+
+def test_domain_info_builder_handles_list_dates():
+    info = _domain_info_from_whois(
+        _raw(
+            creation_date=[
+                datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+                datetime.datetime(2021, 1, 1, tzinfo=datetime.timezone.utc),
+            ]
+        ),
+        "example.com",
+    )
+    assert info.days_since_creation > 0

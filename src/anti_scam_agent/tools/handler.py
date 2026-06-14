@@ -1,10 +1,20 @@
 import whois
-from typing import Annotated
+from typing import Annotated, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-_PRIVACY_MARKERS = ("redacted", "privacy", "whoisguard", "domains by proxy", "data protected")
+# Service-brand / redaction markers, kept specific so a legitimate registrant whose
+# name merely contains the word "privacy" is not flagged.
+_PRIVACY_MARKERS = (
+    "redacted",
+    "whoisguard",
+    "domains by proxy",
+    "data protected",
+    "withheld for privacy",
+    "privacy protect",
+    "privacy service",
+)
 
 
 class DomainInfo(BaseModel):
@@ -12,11 +22,11 @@ class DomainInfo(BaseModel):
     days_since_creation: Annotated[int, Field(description="The number of days since the creation of the domain.")]
     days_until_expiration: Annotated[int, Field(description="The number of days until the expiration of the domain.")]
     registrar: Annotated[str | None, Field(default=None, description="The domain's registrar, if available.")]
-    registrant_country: Annotated[str | None, Field(default=None, description="The registrant's country code, if available.")]
+    registrant_country: Annotated[str | None, Field(default=None, description="Country or country code from the registrant's contact details, if available.")]
     privacy_protected: Annotated[bool, Field(default=False, description="Whether the registrant identity appears to be privacy-protected / redacted.")]
 
 
-def _first(value):
+def _first(value: Any) -> Any:
     """WHOIS fields are sometimes a list; take the first meaningful entry."""
     if isinstance(value, (list, tuple)):
         return value[0] if value else None
@@ -35,7 +45,8 @@ def _looks_privacy_protected(raw: dict) -> bool:
 def _domain_info_from_whois(raw: dict, domain: str) -> DomainInfo:
     tz = ZoneInfo("Asia/Taipei")
     date_now = datetime.now(tz).date()
-    name = str(_first(raw["domain_name"])).lower()
+    raw_name = _first(raw.get("domain_name"))
+    name = (str(raw_name) if raw_name else domain).lower()
     date_creation = _first(raw["creation_date"]).astimezone(tz).date()
     date_expiration = _first(raw["expiration_date"]).astimezone(tz).date()
     return DomainInfo(
