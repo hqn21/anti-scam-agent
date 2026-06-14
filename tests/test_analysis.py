@@ -56,3 +56,16 @@ def test_analysis_agent_returns_assessment_for_legit_fixture():
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)
     assert 0.0 <= assessment.confidence <= 1.0
+
+
+def test_system_prompt_encodes_explicit_decline_rule():
+    from anti_scam_agent.analysis import _SYSTEM_PROMPT
+
+    p = _SYSTEM_PROMPT.lower()
+    assert "payment_explicitly_declined" in p
+    # the rule's core reasoning is actually present, not just the field name
+    assert "no real processor" in p
+    # the old framings are gone
+    assert "luhn_invalid" not in p
+    assert "card tier" not in p
+    assert "exoneration" not in p
