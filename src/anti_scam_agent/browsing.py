@@ -16,7 +16,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_MAX_STEPS = 25
+_MAX_STEPS = 40
 _TIMEOUT_SECONDS = 300  # 5 minutes
 
 
@@ -27,7 +27,7 @@ def _build_task_prompt(url: str, persona: FakePersona) -> str:
     terms that could reveal the true purpose of the visit.
     The agent must not suspect it is being used for anti-scam analysis.
     """
-    return f"""You are visiting the website {url} as an interested first-time user.
+    return f"""You are visiting the website {url} as an interested first-time user who wants to go all the way through whatever the site offers.
 
 Here is the information about you, which you may use to fill in any forms the site asks you to complete:
   - Full name: {persona.name}
@@ -39,16 +39,21 @@ Here is the information about you, which you may use to fill in any forms the si
   - Credit card expiry: {persona.credit_card_expiry}
   - Credit card security code (CVV): {persona.credit_card_cvv}
 
+Your single most important objective is to COMPLETE THE WHOLE FLOW the site offers — from start to final confirmation — rather than to enter perfectly accurate information.
+
 What to do, in order:
   1. Open the page and wait for it to fully load.
-  2. Read what it is about.
-  3. If the site invites you to register or sign in, do so using the information above.
-  4. If the site invites you to complete a purchase, claim a prize, or enter payment details, go through with it using the information above.
-  5. Follow the site's instructions as a normal curious user would. Do not skip steps the site asks you to complete.
-  6. Stop when you have either completed the main flow the site offers, or there is nothing further a user would reasonably do.
+  2. If a cookie banner, pop-up, modal, overlay, or notice appears, CLOSE or dismiss it first. Do not try to click things behind it — clear the blocker, then continue.
+  3. Read what the site is about.
+  4. If the site invites you to register or sign in, do so using the information above. If it emails you a verification code or confirmation link, use the "Check your email inbox" tool to read it and enter the code to finish.
+  5. If the site invites you to complete a purchase, claim a prize, or enter payment details, go all the way through with it using the information above. If you can choose how to pay (for example cash on delivery versus credit card), you prefer to pay by credit card, so choose credit card and enter the card details.
+  6. The form may not perfectly match your details (for example your city or district may not be in a dropdown, or a field may be required that you have no value for). Do not get stuck: pick any reasonable available option, or make up a plausible value, and move on. Getting through the flow matters more than entering matching data.
+  7. Follow the site's steps as a normal determined user would, until you reach the final confirmation or there is genuinely nothing further a user could do.
 
 When you stop, produce a summary of what happened in the structured output format. Report objective facts: what the site appears to be about, what links it has to other domains, what forms it asked you to fill in, and anything during the visit that surprised you as a user.
 For each step like login or payment, record the outcome honestly: choose 'succeeded' only when the site showed an explicit confirmation or success screen, 'failed' when it showed an explicit error or rejection, 'unclear' when there was no clear response either way, and 'not_attempted' when you did not try it.
+If you entered card details, set payment_explicitly_declined to true only when the site clearly told you the card itself was declined or invalid; if it accepted the card, moved on, or showed no clear card error, set it to false.
+Set visit_completed to true if you ran the flow to a normal conclusion, and false if you could not reach the end of it.
 """
 
 
