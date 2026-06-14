@@ -73,6 +73,12 @@ def test_prompt_handles_stale_element_indices():
     assert "currently listed" in low
 
 
+def test_prompt_waits_for_lazy_lists_to_settle():
+    low = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "scroll all the way down" in low
+    assert "stops growing" in low
+
+
 def test_prompt_distinguishes_targeting_miss_from_refusal():
     # A click that didn't land must be retried on the same intended button, not
     # treated as the site refusing the action (so flow-critical buttons aren't abandoned).
