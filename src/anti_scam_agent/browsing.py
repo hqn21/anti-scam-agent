@@ -180,7 +180,7 @@ def _build_email_tools(client: "AgentMail", inbox: str) -> Tools:
 
 
 async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail", inbox: str) -> BrowsingResult:
-    llm = ChatOpenAI(model="gpt-4.1-mini")
+    llm = ChatOpenAI(model="gpt-4.1")
     task = _build_task_prompt(url, persona)
 
     browser = Browser(
