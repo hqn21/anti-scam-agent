@@ -188,9 +188,10 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         headless=False,
         disable_security=True,
         cross_origin_iframes=True,
-        # paint_order_filtering left at its default (True): drop visually-occluded
-        # elements so a covered/duplicate button with the same label isn't indexed
-        # and mis-clicked.
+        # paint_order_filtering disabled: the (experimental) occlusion filter also drops
+        # real, visible buttons, leaving the agent unable to find them. The stale-index
+        # misclick it was meant to help with is already handled by max_actions_per_step=1.
+        paint_order_filtering=False,
     )
 
     agent = BrowserAgent(
