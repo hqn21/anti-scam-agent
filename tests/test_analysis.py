@@ -33,22 +33,17 @@ OBVIOUS_LEGIT = BrowsingResult(
 )
 
 
-def test_run_analysis_agent_accepts_card_tier():
-    params = inspect.signature(run_analysis_agent).parameters
-    assert "card_tier" in params
-
-
 def test_run_analysis_agent_accepts_static_signals():
     params = inspect.signature(run_analysis_agent).parameters
     assert "static_signals" in params
 
 
-def _run(result: BrowsingResult, domain: str, card_tier: str | None = None, static_signals=None) -> ScamAssessment:
-    return asyncio.run(run_analysis_agent(result, domain, card_tier, static_signals))
+def _run(result: BrowsingResult, domain: str, static_signals=None) -> ScamAssessment:
+    return asyncio.run(run_analysis_agent(result, domain, static_signals))
 
 
 def test_analysis_agent_returns_assessment_for_scam_fixture():
-    assessment = _run(OBVIOUS_SCAM, "example.com", card_tier="luhn_invalid")
+    assessment = _run(OBVIOUS_SCAM, "example.com")
     print("\n[SCAM FIXTURE]")
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)

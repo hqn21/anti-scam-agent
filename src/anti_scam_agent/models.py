@@ -9,7 +9,6 @@ class FakePersona(BaseModel):
     phone: str
     address: str
     credit_card_number: str
-    credit_card_number_luhn_valid: str
     credit_card_expiry: str
     credit_card_cvv: str
 

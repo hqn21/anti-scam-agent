@@ -9,8 +9,7 @@ def _persona() -> FakePersona:
         password="hunter2hunter2",
         phone="555-123-4567",
         address="1 Main St, Springfield",
-        credit_card_number="4111111111111112",
-        credit_card_number_luhn_valid="4111111111111111",
+        credit_card_number="4111111111111111",
         credit_card_expiry="08/30",
         credit_card_cvv="123",
     )
@@ -34,9 +33,7 @@ def test_prompt_does_not_leak_card_tier_or_luhn():
     lowered = prompt.lower()
     assert "luhn" not in lowered
     assert "card_tier" not in lowered
-    # The active (primary) card appears; the Luhn-valid fallback never does.
-    assert "4111111111111112" in prompt
-    assert "4111111111111111" not in prompt
+    assert "4111111111111111" in prompt  # the card the agent is given
 
 
 def test_fallback_marks_visit_incomplete():

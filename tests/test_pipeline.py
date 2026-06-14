@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 import anti_scam_agent.pipeline as pipeline
-from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome, ScamAssessment
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment
 from anti_scam_agent.signals import StaticSignals
 
 
@@ -29,17 +29,15 @@ def _assessment() -> ScamAssessment:
 
 def _patch(monkeypatch, payment_sequence):
     """Stub browsing, analysis, static signals; capture args."""
-    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None, "persona_email": None}
+    calls = {"browse": 0, "static": None, "persona_email": None}
 
     async def fake_browse(url, persona):
-        calls["cards"].append(persona.credit_card_number)
         calls["persona_email"] = persona.email
         payment = payment_sequence[calls["browse"]]
         calls["browse"] += 1
         return _result(payment)
 
-    async def fake_analyze(result, domain, card_tier, static_signals):
-        calls["card_tier"] = card_tier
+    async def fake_analyze(result, domain, static_signals):
         calls["static"] = static_signals
         return _assessment()
 
@@ -51,49 +49,11 @@ def _patch(monkeypatch, payment_sequence):
     return calls
 
 
-def test_invalid_card_accepted_stops_after_one_run(monkeypatch):
-    calls = _patch(monkeypatch, [Outcome.succeeded])
-    asyncio.run(pipeline.run_pipeline("http://shop.test"))
-    assert calls["browse"] == 1
-    assert calls["card_tier"] == "luhn_invalid"
-
-
-def test_invalid_rejected_then_valid_accepted_runs_twice(monkeypatch):
-    known = FakePersona(
-        name="Test User",
-        email="t@x.com",
-        password="password1234",
-        phone="555-0000",
-        address="1 Main St",
-        credit_card_number="4111111111111112",  # Luhn-invalid primary
-        credit_card_number_luhn_valid="4111111111111111",  # Luhn-valid fallback
-        credit_card_expiry="12/30",
-        credit_card_cvv="123",
-    )
-    monkeypatch.setattr(pipeline, "generate_persona", lambda: known)
-    calls = _patch(monkeypatch, [Outcome.failed, Outcome.succeeded])
-    asyncio.run(pipeline.run_pipeline("http://shop.test"))
-    assert calls["browse"] == 2
-    # Run 1 used the invalid primary; Run 2 used the specific Luhn-valid fallback.
-    assert calls["cards"][0] == known.credit_card_number
-    assert calls["cards"][1] == known.credit_card_number_luhn_valid
-    assert calls["card_tier"] == "luhn_valid"
-
-
-@pytest.mark.parametrize("payment", [Outcome.unclear, Outcome.not_attempted])
-def test_non_failure_payment_does_not_trigger_second_run(monkeypatch, payment):
+@pytest.mark.parametrize("payment", [Outcome.succeeded, Outcome.failed, Outcome.unclear, Outcome.not_attempted])
+def test_pipeline_runs_browsing_once(monkeypatch, payment):
     calls = _patch(monkeypatch, [payment])
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["browse"] == 1
-    assert calls["card_tier"] is None
-
-
-@pytest.mark.parametrize("second", [Outcome.failed, Outcome.unclear, Outcome.not_attempted])
-def test_second_run_without_success_leaves_card_tier_none(monkeypatch, second):
-    calls = _patch(monkeypatch, [Outcome.failed, second])
-    asyncio.run(pipeline.run_pipeline("http://shop.test"))
-    assert calls["browse"] == 2
-    assert calls["card_tier"] is None
 
 
 def test_static_signals_passed_to_analysis(monkeypatch):
