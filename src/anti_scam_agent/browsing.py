@@ -4,7 +4,7 @@ import logging
 from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser
 from dotenv import load_dotenv
 
-from anti_scam_agent.models import BrowsingResult, FakePersona
+from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome
 
 load_dotenv()
 
@@ -34,15 +34,15 @@ Here is the information about you, which you may use to fill in any forms the si
   - Credit card security code (CVV): {persona.credit_card_cvv}
 
 What to do, in order:
-  1. Open the page and when for it fully loaded.
+  1. Open the page and wait for it to fully load.
   2. Read what it is about.
   3. If the site invites you to register or sign in, do so using the information above.
   4. If the site invites you to complete a purchase, claim a prize, or enter payment details, go through with it using the information above.
   5. Follow the site's instructions as a normal curious user would. Do not skip steps the site asks you to complete.
   6. Stop when you have either completed the main flow the site offers, or there is nothing further a user would reasonably do.
 
-When you stop, produce a summary of what happened in the structured output format. Report objective facts: what the site appears to be about, what links it has to other domains, what forms it asked you to fill in, whether registration / login / payment appeared to succeed, and anything during the visit that surprised you as a user.
-For each action, likes login, if the website did not respond an explicit error, it should be account as a success action.
+When you stop, produce a summary of what happened in the structured output format. Report objective facts: what the site appears to be about, what links it has to other domains, what forms it asked you to fill in, and anything during the visit that surprised you as a user.
+For each step like login or payment, record the outcome honestly: choose 'succeeded' only when the site showed an explicit confirmation or success screen, 'failed' when it showed an explicit error or rejection, 'unclear' when there was no clear response either way, and 'not_attempted' when you did not try it.
 """
 
 
@@ -51,11 +51,12 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
         website_summary=f"Unable to complete visit to {url}.",
         outgoing_links=[],
         login_attempted=False,
-        login_succeeded=False,
+        login_outcome=Outcome.not_attempted,
         credit_card_submitted=False,
-        credit_card_accepted=False,
+        payment_outcome=Outcome.not_attempted,
         form_fields_requested=[],
         unexpected_events=[note],
+        visit_completed=False,
     )
 
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
