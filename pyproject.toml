@@ -9,6 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "browser-use",
+    "dnspython>=2.8.0",
     "faker>=40.19.1",
     "openai-agents>=0.17.4",
     "pydantic==2.12.5",
