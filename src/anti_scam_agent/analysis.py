@@ -61,7 +61,11 @@ async def run_analysis_agent(
         model="gpt-4.1",
     )
 
-    static_json = static_signals.model_dump_json(indent=2) if static_signals is not None else "null (unavailable)"
+    static_json = (
+        static_signals.model_dump_json(indent=2, exclude={"target_host"})
+        if static_signals is not None
+        else "null"
+    )
     user_message = (
         f"Target domain: {domain}\n"
         f"Card tier: {card_tier if card_tier is not None else 'null (no acceptance observed)'}\n\n"
