@@ -98,3 +98,25 @@ def test_collect_email_evidence_failure_tolerant():
                                datetime.datetime.now(datetime.timezone.utc), poll_seconds=0, interval=0)
     assert isinstance(e, EmailEvidence)
     assert e.polled is False
+
+
+def test_collect_email_evidence_keeps_last_on_later_failure():
+    since = datetime.datetime(2026, 6, 14, 11, 0, tzinfo=datetime.timezone.utc)
+    calls = {"n": 0}
+
+    class Flaky:
+        def list(self, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return SimpleNamespace(
+                    count=2,
+                    messages=[_msg("promo@randomcdn.biz", labels=["inbound"]),
+                              _msg("x@other.biz", labels=["inbound"])],
+                )
+            raise RuntimeError("transient")
+
+    client = SimpleNamespace(inboxes=SimpleNamespace(messages=Flaky()))
+    e = collect_email_evidence(client, "in@x.to", "shop.com", since, poll_seconds=30, interval=0)
+    assert e.polled is True            # first poll succeeded
+    assert e.message_count == 2        # its result is preserved despite the later failure
+    assert e.from_target_domain is False

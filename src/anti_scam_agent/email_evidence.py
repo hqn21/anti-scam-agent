@@ -1,11 +1,16 @@
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 from email.utils import parseaddr
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from agentmail import AgentMail
 
 load_dotenv()
 
@@ -13,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_INBOXES = ["asalpha@agentmail.to", "asbravo@agentmail.to", "ascharlie@agentmail.to"]
 _inbox_index = 0
+_inbox_lock = threading.Lock()
 
 
 class EmailEvidence(BaseModel):
@@ -37,8 +43,9 @@ def pick_inbox() -> str:
     """Round-robin across the configured inboxes (scans run sequentially)."""
     global _inbox_index
     inboxes = _get_inboxes()
-    inbox = inboxes[_inbox_index % len(inboxes)]
-    _inbox_index += 1
+    with _inbox_lock:
+        inbox = inboxes[_inbox_index % len(inboxes)]
+        _inbox_index += 1
     return inbox
 
 
@@ -73,7 +80,7 @@ def _evidence_from_messages(messages, target_host: str) -> EmailEvidence:
     )
 
 
-def make_client():
+def make_client() -> "AgentMail | None":
     """Return an AgentMail client, or None when unconfigured (email step is skipped)."""
     api_key = os.getenv("AGENTMAIL_API_KEY")
     if not api_key:
@@ -98,6 +105,7 @@ def collect_email_evidence(
     """Poll the inbox until a domain-matching message arrives or the window closes.
 
     Never raises: any failure yields EmailEvidence(polled=False).
+    interval=0 is intended for tests; production callers should keep the default.
     """
     deadline = time.monotonic() + poll_seconds
     last: EmailEvidence | None = None
@@ -115,7 +123,7 @@ def collect_email_evidence(
                 return last  # early exit — got what we came for
         except Exception as e:  # noqa: BLE001 — email signal must never break the pipeline
             logger.warning("email evidence poll failed for %s: %s", inbox, e)
-            return EmailEvidence(polled=False)
+            return last or EmailEvidence(polled=False)
         if time.monotonic() >= deadline:
             return last or EmailEvidence(polled=True)
         time.sleep(interval)
