@@ -56,3 +56,33 @@ def test_collect_static_signals_bundles_subcollectors(monkeypatch):
     assert result.tls.issuer_org == "X"
     assert result.dns.has_mx is True
     assert result.target_host == "shop.example"
+
+
+def test_dns_info_absent_records_are_false(monkeypatch):
+    import dns.resolver
+
+    from anti_scam_agent.signals import _get_dns_info
+
+    class _Absent:
+        lifetime = 0
+
+        def resolve(self, domain, rtype):
+            raise dns.resolver.NoAnswer
+
+    monkeypatch.setattr(dns.resolver, "Resolver", lambda: _Absent())
+    assert _get_dns_info("x.test").has_mx is False
+
+
+def test_dns_info_lookup_failure_is_unknown(monkeypatch):
+    import dns.resolver
+
+    from anti_scam_agent.signals import _get_dns_info
+
+    class _Down:
+        lifetime = 0
+
+        def resolve(self, domain, rtype):
+            raise OSError("network down")
+
+    monkeypatch.setattr(dns.resolver, "Resolver", lambda: _Down())
+    assert _get_dns_info("x.test").has_mx is None

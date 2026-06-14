@@ -4,7 +4,7 @@ import ssl
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from anti_scam_agent.tools.handler import DomainInfo, _get_domain_info
 
@@ -25,7 +25,7 @@ class TlsInfo(BaseModel):
 
 class DnsInfo(BaseModel):
     has_mx: bool | None = None
-    nameservers: list[str] = []
+    nameservers: list[str] = Field(default_factory=list)
 
 
 class StaticSignals(BaseModel):
@@ -43,8 +43,11 @@ def _tls_info_from_cert(cert: dict, now: datetime | None = None) -> TlsInfo:
     now = now or datetime.now(timezone.utc)
     issuer = {k: v for entry in cert.get("issuer", ()) for k, v in entry}
     issuer_org = issuer.get("organizationName")
-    not_before = datetime.strptime(cert["notBefore"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
-    age_days = (now.date() - not_before.date()).days
+    age_days: int | None = None
+    not_before_str = cert.get("notBefore")
+    if not_before_str:
+        not_before = datetime.strptime(not_before_str, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+        age_days = (now.date() - not_before.date()).days
     san_count = len([v for k, v in cert.get("subjectAltName", ()) if k == "DNS"])
     is_free_dv = bool(issuer_org) and any(m in issuer_org.lower() for m in _FREE_DV_ISSUERS)
     return TlsInfo(issuer_org=issuer_org, age_days=age_days, san_count=san_count, is_free_dv=is_free_dv)
@@ -66,9 +69,11 @@ def _get_dns_info(domain: str) -> DnsInfo:
 
     try:
         mx = resolver.resolve(domain, "MX")
-        has_mx = len(mx) > 0
+        has_mx: bool | None = len(mx) > 0
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        has_mx = False  # domain/record genuinely absent
     except Exception:
-        has_mx = False
+        has_mx = None  # timeout / network failure — genuinely unknown, not a signal
 
     nameservers: list[str] = []
     try:
@@ -91,6 +96,7 @@ def _safe(fn, *args):
 def collect_static_signals(url: str) -> StaticSignals:
     """Best-effort local signals. Never raises: any failure degrades to None."""
     host = _target_host(url)
+    # _target_host cannot raise: urlparse is robust on any string, so it sits outside _safe.
     return StaticSignals(
         target_host=host,
         domain_info=_safe(_get_domain_info, host),
