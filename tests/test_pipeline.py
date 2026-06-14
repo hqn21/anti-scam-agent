@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 import anti_scam_agent.pipeline as pipeline
+from anti_scam_agent.email_evidence import EmailEvidence
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome, ScamAssessment
 from anti_scam_agent.signals import StaticSignals
 
@@ -28,26 +29,26 @@ def _assessment() -> ScamAssessment:
 
 
 def _patch(monkeypatch, payment_sequence):
-    """Stub browsing, analysis, and the static-signal collector; capture args."""
-    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None}
+    """Stub browsing, analysis, static + email signals; capture args."""
+    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None, "email": None, "persona_email": None}
 
     async def fake_browse(url, persona):
         calls["cards"].append(persona.credit_card_number)
+        calls["persona_email"] = persona.email
         payment = payment_sequence[calls["browse"]]
         calls["browse"] += 1
         return _result(payment)
 
-    async def fake_analyze(result, domain, card_tier, static_signals):
+    async def fake_analyze(result, domain, card_tier, static_signals, email_evidence):
         calls["card_tier"] = card_tier
         calls["static"] = static_signals
+        calls["email"] = email_evidence
         return _assessment()
-
-    def fake_collect(url):
-        return StaticSignals(target_host="shop.test")
 
     monkeypatch.setattr(pipeline, "run_browsing_agent", fake_browse)
     monkeypatch.setattr(pipeline, "run_analysis_agent", fake_analyze)
-    monkeypatch.setattr(pipeline, "collect_static_signals", fake_collect)
+    monkeypatch.setattr(pipeline, "collect_static_signals", lambda url: StaticSignals(target_host="shop.test"))
+    monkeypatch.setattr(pipeline, "make_client", lambda: None)  # email disabled by default in tests
     return calls
 
 
@@ -101,3 +102,23 @@ def test_static_signals_passed_to_analysis(monkeypatch):
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert isinstance(calls["static"], StaticSignals)
     assert calls["static"].target_host == "shop.test"
+
+
+def test_email_evidence_collected_when_configured(monkeypatch):
+    calls = _patch(monkeypatch, [Outcome.unclear])
+    monkeypatch.setattr(pipeline, "make_client", lambda: object())
+    monkeypatch.setattr(pipeline, "pick_inbox", lambda: "asalpha@agentmail.to")
+    monkeypatch.setattr(
+        pipeline, "collect_email_evidence",
+        lambda client, inbox, target, since, poll_seconds: EmailEvidence(polled=True, from_target_domain=True, authenticated=True),
+    )
+    asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert calls["persona_email"] == "asalpha@agentmail.to"
+    assert isinstance(calls["email"], EmailEvidence)
+    assert calls["email"].from_target_domain is True
+
+
+def test_email_skipped_when_unconfigured(monkeypatch):
+    calls = _patch(monkeypatch, [Outcome.unclear])
+    asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert calls["email"] is None
