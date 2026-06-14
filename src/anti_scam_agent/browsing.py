@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser
 from dotenv import load_dotenv
@@ -60,6 +61,19 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
     )
 
 
+def _external_links(urls: list[str | None], target_url: str) -> list[str]:
+    """Distinct hosts visited during the run that differ from the target host."""
+    target = (urlparse(target_url).hostname or "").removeprefix("www.")
+    seen: list[str] = []
+    for url in urls:
+        if not url:
+            continue
+        host = (urlparse(url).hostname or "").removeprefix("www.")
+        if host and host != target and host not in seen:
+            seen.append(host)
+    return seen
+
+
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)
@@ -97,14 +111,22 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
         return _fallback_result(url, f"browsing raised {type(e).__name__}: {e}")
 
     structured = history.structured_output
+    result: BrowsingResult | None = None
     if isinstance(structured, BrowsingResult):
-        return structured
-    if isinstance(structured, dict):
+        result = structured
+    elif isinstance(structured, dict):
         try:
-            return BrowsingResult.model_validate(structured)
+            result = BrowsingResult.model_validate(structured)
         except Exception as e:
             logger.warning("failed to parse structured dict on %s: %s", url, e)
             return _fallback_result(url, f"parsing structured output failed: {e}")
+
+    if result is not None:
+        try:
+            result.outgoing_links = _external_links(history.urls(), url)
+        except Exception as e:  # never let history parsing break the result
+            logger.warning("could not derive outgoing_links on %s: %s", url, e)
+        return result
 
     logger.warning("browsing agent returned no structured output on %s; using fallback", url)
     return _fallback_result(url, "browsing agent produced no structured output")
