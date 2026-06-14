@@ -1,3 +1,4 @@
+from typing import Literal
 from urllib.parse import urlparse
 
 from anti_scam_agent.analysis import run_analysis_agent
@@ -16,7 +17,7 @@ async def run_pipeline(url: str) -> ScamAssessment:
 
     # Run 1: a Luhn-invalid card. Acceptance here is the strongest signal.
     result = await run_browsing_agent(url, persona)
-    card_tier: str | None = None
+    card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None
 
     if result.payment_outcome is Outcome.succeeded:
         card_tier = "luhn_invalid"
