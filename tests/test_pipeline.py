@@ -29,10 +29,11 @@ def _assessment() -> ScamAssessment:
 
 def _patch(monkeypatch, payment_sequence):
     """Stub browsing, analysis, static signals; capture args."""
-    calls = {"browse": 0, "static": None, "persona_email": None}
+    calls = {"browse": 0, "static": None, "persona_email": None, "browse_inbox": None}
 
-    async def fake_browse(url, persona):
+    async def fake_browse(url, persona, client, inbox):
         calls["persona_email"] = persona.email
+        calls["browse_inbox"] = inbox
         payment = payment_sequence[calls["browse"]]
         calls["browse"] += 1
         return _result(payment)
@@ -78,3 +79,11 @@ def test_persona_email_routed_through_inbox(monkeypatch):
     calls = _patch(monkeypatch, [Outcome.unclear])
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["persona_email"] == "asalpha@agentmail.to"
+
+
+def test_browsing_receives_inbox(monkeypatch):
+    # Confirms client+inbox are forwarded to browsing (the tool needs them),
+    # not just that persona.email was set.
+    calls = _patch(monkeypatch, [Outcome.unclear])
+    asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert calls["browse_inbox"] == "asalpha@agentmail.to"
