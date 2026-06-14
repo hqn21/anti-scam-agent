@@ -4,6 +4,7 @@ from typing import Literal
 from agents import Agent, Runner
 from dotenv import load_dotenv
 
+from anti_scam_agent.email_evidence import EmailEvidence
 from anti_scam_agent.models import BrowsingResult, ScamAssessment
 from anti_scam_agent.signals import StaticSignals
 
@@ -27,11 +28,20 @@ Static signals (any field may be null when a lookup failed — treat null as 'un
   - tls: issuer_org, age_days, san_count, is_free_dv (a free domain-validated certificate, e.g. Let's Encrypt/ZeroSSL).
   - dns: has_mx (does the domain accept mail?), nameservers.
 
+Email evidence (from an inbox used as the registration email; may be null when AgentMail was not configured):
+  - polled: whether the inbox was actually checked.
+  - message_count: how many emails arrived after the visit (a large spam influx can itself hint the data was resold).
+  - from_target_domain: whether mail arrived whose sender domain matches the target.
+  - authenticated: whether such matching mail passed SPF/DKIM/DMARC.
+
 Heuristics (combine them — no single signal is definitive):
   - 'luhn_invalid' acceptance = strong evidence; 'luhn_valid' acceptance = moderate evidence.
   - Very young domains (days_since_creation < 90) combined with any payment acceptance or heavy PII collection are strong scam signals.
   - A young domain + a brand-new free DV certificate + no MX record is a classic throwaway-scam fingerprint; together they compound risk, though none alone is conclusive.
   - has_mx=false is a weak negative signal (a real merchant usually has company mail); has_mx=true is mild reassurance. Never decisive alone.
+  - A genuine transactional email — from_target_domain=true AND authenticated=true — is STRONG evidence the site is a real operation (it runs an authenticated mail system). Let it rescue an otherwise-young/uncertain site from a scam verdict; this is the most reliable exoneration signal available.
+  - No email (from_target_domain=false) is only a WEAK negative signal — many legitimate sites do not send mail, and email may have been skipped (polled=false). Never treat absence of email as scam evidence on its own.
+  - If the visit stalled because the site demanded email verification (see the browsing report), lean toward legitimate — scam sites almost never run real verification.
   - privacy_protected and free DV certs are common on legitimate sites too — only let them compound an already-young or payment-positive case.
   - Old, long-expiration domains with normal user flows and an MX record are a weak signal of low risk.
   - Requests for unusually sensitive PII (national ID, bank account, mother's maiden name) alongside other red flags compound risk.
@@ -53,6 +63,7 @@ async def run_analysis_agent(
     domain: str,
     card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None,
     static_signals: StaticSignals | None = None,
+    email_evidence: EmailEvidence | None = None,
 ) -> ScamAssessment:
     agent = Agent(
         name="AnalysisAgent",
@@ -66,10 +77,12 @@ async def run_analysis_agent(
         if static_signals is not None
         else "null"
     )
+    email_json = email_evidence.model_dump_json(indent=2) if email_evidence is not None else "null"
     user_message = (
         f"Target domain: {domain}\n"
         f"Card tier: {card_tier if card_tier is not None else 'null (no acceptance observed)'}\n\n"
         f"Static signals (JSON):\n{static_json}\n\n"
+        f"Email evidence (JSON):\n{email_json}\n\n"
         f"Browsing report (JSON):\n{browsing_result.model_dump_json(indent=2)}"
     )
 
