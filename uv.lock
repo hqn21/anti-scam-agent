@@ -7,6 +7,22 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "agentmail"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/1a/3b2fdae22ac094439551eb128845da3d6201fda445dba099f05d18305dec/agentmail-0.5.5.tar.gz", hash = "sha256:70f1b8f105b9be045657ea279ebecddbff48a97f92285405e8e6cd472715e438", size = 134661, upload-time = "2026-06-12T22:57:39.511Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/8f/d2f8348c7471ac62587c6534e5f9f535955881835d9607b5e54a8add4a2e/agentmail-0.5.5-py3-none-any.whl", hash = "sha256:6c1a76af4bffa3dd8427651e0dd2019525eb10c20624d768a80d5066c893bda0", size = 292155, upload-time = "2026-06-12T22:57:38.273Z" },
+]
+
+[[package]]
 name = "aiofiles"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -155,6 +171,7 @@ name = "anti-scam-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agentmail" },
     { name = "browser-use" },
     { name = "dnspython" },
     { name = "faker" },
@@ -171,6 +188,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agentmail", specifier = ">=0.5.5" },
     { name = "browser-use", git = "https://github.com/hqn21/browser-use.git?rev=fix%2Fupdate-openai-pin-for-downstream-compatibility" },
     { name = "dnspython", specifier = ">=2.8.0" },
     { name = "faker", specifier = ">=40.19.1" },
