@@ -10,16 +10,25 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a fraud analyst. You are given a structured report from a colleague who visited a target website as an ordinary user, plus the site's domain. Your job is to judge whether the site is a scam / phishing operation, with reasoning.
+_SYSTEM_PROMPT = """You are a fraud analyst. You are given a structured report from a colleague who visited a target website as an ordinary user, plus the site's domain and which card tier was used. Your job is to judge whether the site is a scam / phishing operation, with reasoning.
 
 Before producing your judgment, call the `get_domain_info` tool with the target domain to learn how long ago the domain was registered and when it expires.
 
+The report uses four-state outcomes ('not_attempted', 'failed', 'unclear', 'succeeded'). Only 'succeeded' is a positive signal; 'unclear' is NOT acceptance and must not be treated as one.
+
+Card tier (provided separately):
+  - 'luhn_invalid': the site accepted a card number that fails the basic Luhn checksum — a real front end rejects this outright. `payment_outcome='succeeded'` with this tier is the STRONGEST single scam signal.
+  - 'luhn_valid': the bad card was rejected, but a checksum-valid card was then accepted with instant success and no payment-processor redirect — a SECONDARY (weaker) scam signal.
+  - null: no acceptance was observed; do not infer payment fraud.
+
 Heuristics (combine them — no single signal is definitive):
-  - A legitimate site validates payment details against a real payment processor. If the report shows `credit_card_submitted=true` and `credit_card_accepted=true` but describes an instant success without a processor redirect, treat this as strong evidence of scam: the site accepted card details that a real processor would have rejected.
+  - Treat 'luhn_invalid' acceptance as strong evidence; 'luhn_valid' acceptance as moderate evidence; weigh accordingly.
   - Very young domains (days_since_creation < 90) combined with any payment acceptance or heavy PII collection are strong scam signals.
   - Old, long-expiration domains with normal user flows are a weak signal of low risk.
   - Requests for unusually sensitive PII (national ID, bank account, mother's maiden name) alongside other red flags compound risk.
   - Unexpected redirects to unrelated domains after submitting data are suspicious.
+
+ABSTAIN RULE: if `visit_completed` is false, the colleague could not complete the visit, so you have almost no behavioral evidence. In that case do not return a confident scam verdict: cap confidence at 0.4 and lean toward is_scam=false unless the domain info alone is overwhelmingly damning.
 
 Return a ScamAssessment:
   - is_scam: your best binary judgment.
@@ -30,7 +39,9 @@ Return a ScamAssessment:
 """
 
 
-async def run_analysis_agent(browsing_result: BrowsingResult, domain: str) -> ScamAssessment:
+async def run_analysis_agent(
+    browsing_result: BrowsingResult, domain: str, card_tier: str | None = None
+) -> ScamAssessment:
     agent = Agent(
         name="AnalysisAgent",
         instructions=_SYSTEM_PROMPT,
@@ -40,7 +51,8 @@ async def run_analysis_agent(browsing_result: BrowsingResult, domain: str) -> Sc
     )
 
     user_message = (
-        f"Target domain: {domain}\n\n"
+        f"Target domain: {domain}\n"
+        f"Card tier: {card_tier if card_tier is not None else 'null (no acceptance observed)'}\n\n"
         f"Browsing report (JSON):\n{browsing_result.model_dump_json(indent=2)}"
     )
 
