@@ -21,10 +21,12 @@ async def run_pipeline(url: str) -> ScamAssessment:
     persona = generate_persona()
     domain = _extract_domain(url)
 
-    # AgentMail is mandatory; route the persona's email through a real inbox.
-    make_client()  # raises if unconfigured
-    persona = persona.model_copy(update={"email": pick_inbox()})
+    # AgentMail is mandatory; route the persona's email through a real inbox so the
+    # Browsing Agent can read verification codes mid-flow.
+    client = make_client()  # raises if unconfigured
+    inbox = pick_inbox()
+    persona = persona.model_copy(update={"email": inbox})
 
-    result = await run_browsing_agent(url, persona)
+    result = await run_browsing_agent(url, persona, client, inbox)
     static_signals = await asyncio.to_thread(collect_static_signals, url)
     return await run_analysis_agent(result, domain, static_signals)

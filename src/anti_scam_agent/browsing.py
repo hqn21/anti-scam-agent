@@ -1,11 +1,16 @@
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser
+from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser, Tools
 from dotenv import load_dotenv
 
+from anti_scam_agent.email_evidence import read_inbox_text
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome
+
+if TYPE_CHECKING:
+    from agentmail import AgentMail
 
 load_dotenv()
 
@@ -81,7 +86,22 @@ def _external_links(urls: list[str | None], target_url: str) -> list[str]:
     return links
 
 
-async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
+def _build_email_tools(client: "AgentMail", inbox: str) -> Tools:
+    """A neutral 'read your inbox' tool. client + inbox are closure-captured so they
+    never appear in the LLM-facing action schema (preserving the blind invariant)."""
+    tools = Tools()
+
+    @tools.action(
+        "Check your email inbox and read your most recent messages — useful when a "
+        "site says it has emailed you a code or a confirmation link."
+    )
+    async def read_email_inbox() -> str:
+        return await asyncio.to_thread(read_inbox_text, client, inbox)
+
+    return tools
+
+
+async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail", inbox: str) -> BrowsingResult:
     llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)
 
@@ -101,6 +121,7 @@ async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
         browser=browser,
         use_vision=True,
         output_model_schema=BrowsingResult,
+        tools=_build_email_tools(client, inbox),
     )
 
     try:
