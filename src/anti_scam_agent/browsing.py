@@ -62,16 +62,22 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
 
 
 def _external_links(urls: list[str | None], target_url: str) -> list[str]:
-    """Distinct hosts visited during the run that differ from the target host."""
+    """Distinct hosts visited during the run that differ from the target host.
+
+    Subdomains of the target (e.g. pay.shop.test vs shop.test) count as external;
+    only the bare www. prefix is normalised away.
+    """
     target = (urlparse(target_url).hostname or "").removeprefix("www.")
-    seen: list[str] = []
+    seen: set[str] = set()
+    links: list[str] = []
     for url in urls:
         if not url:
             continue
         host = (urlparse(url).hostname or "").removeprefix("www.")
         if host and host != target and host not in seen:
-            seen.append(host)
-    return seen
+            seen.add(host)
+            links.append(host)
+    return links
 
 
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
