@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 from agents import Agent, Runner
 from dotenv import load_dotenv
@@ -18,7 +19,7 @@ The report uses four-state outcomes ('not_attempted', 'failed', 'unclear', 'succ
 
 Card tier (provided separately):
   - 'luhn_invalid': the site accepted a card number that fails the basic Luhn checksum — a real front end rejects this outright. `payment_outcome='succeeded'` with this tier is the STRONGEST single scam signal.
-  - 'luhn_valid': the bad card was rejected, but a checksum-valid card was then accepted with instant success and no payment-processor redirect — a SECONDARY (weaker) scam signal.
+  - 'luhn_valid': a checksum-valid card was accepted — the stronger Luhn-invalid card had already been rejected by the site's front end before this run. Acceptance here (instant success, no payment-processor redirect) is a SECONDARY (weaker) scam signal.
   - null: no acceptance was observed; do not infer payment fraud.
 
 Heuristics (combine them — no single signal is definitive):
@@ -40,7 +41,9 @@ Return a ScamAssessment:
 
 
 async def run_analysis_agent(
-    browsing_result: BrowsingResult, domain: str, card_tier: str | None = None
+    browsing_result: BrowsingResult,
+    domain: str,
+    card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None,
 ) -> ScamAssessment:
     agent = Agent(
         name="AnalysisAgent",
