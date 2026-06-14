@@ -93,3 +93,28 @@ def test_email_tool_reads_inbox_contents():
     action = tools.registry.registry.actions["read_email_inbox"]
     out = asyncio.run(action.function(params=action.param_model()))
     assert "123456" in str(out)
+
+
+def test_prompt_instructs_dismissing_blockers():
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "pop-up" in prompt or "popup" in prompt or "overlay" in prompt
+    assert "close" in prompt or "dismiss" in prompt
+
+
+def test_prompt_prioritizes_completing_the_flow_over_exact_data():
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    # improvise when the form doesn't fit the persona (distinctive phrasing from step 6)
+    assert "make up" in prompt
+    assert "plausible" in prompt
+    assert "do not get stuck" in prompt or "don't get stuck" in prompt
+
+
+def test_prompt_prefers_credit_card_payment():
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "credit card" in prompt
+
+
+def test_prompt_stays_neutral():
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    for word in ("scam", "phishing", "suspicious", "fake", "fabricated", "fraud", "anti-"):
+        assert word not in prompt
