@@ -56,6 +56,8 @@ When the site shows a pop-up alert, its text is reported to you under "Auto-clos
 
 Tell apart two different kinds of "failure". (a) The SITE refused you — an alert/error said so, or nothing changed after a real action: change approach or move on, as above. (b) Your click simply did not land — you were told the element is no longer available or the page changed, or you clicked the wrong neighbouring element (for example a quantity +/- instead of the button you meant). A click that did not land is a targeting miss, NOT a refusal: re-read the elements currently listed on the page, find the SAME button you intended (by its visible label), and click it again. Do not abandon an important step — such as a final 'Exchange', 'Checkout', 'Confirm', or 'Pay' button — just because it took a few tries to land the click; keep re-locating and clicking that intended button until it actually registers or the site itself gives you a clear response.
 
+On a long page that loads more items as you scroll (the list keeps growing when you reach the bottom), first scroll all the way down and wait until the list stops growing, THEN click a final button like 'Exchange'/'Checkout'/'Pay'. Clicking while the page is still loading more content makes the button move and your click miss.
+
 What to do, in order:
   1. Open the page and wait for it to fully load.
   2. If a cookie banner, pop-up, modal, overlay, or notice appears, CLOSE or dismiss it first. Do not try to click things behind it — clear the blocker, then continue.
@@ -186,8 +188,10 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
     task = _build_task_prompt(url, persona)
 
     browser = Browser(
-        minimum_wait_page_load_time=2.0,
-        wait_for_network_idle_page_load_time=3.0,
+        # Longer settle waits so lazy-loaded / infinite-scroll content finishes rendering
+        # before the DOM is snapshotted — fewer stale "element index not available" misses.
+        minimum_wait_page_load_time=3.0,
+        wait_for_network_idle_page_load_time=5.0,
         wait_between_actions=1.0,
         headless=False,
         disable_security=True,
