@@ -9,7 +9,7 @@ Anti-Scam Agent detects phishing / scam websites (e-commerce, lottery / prize-cl
 The system is two LLM agents wired in sequence by `pipeline.py`:
 
 1. **Browsing Agent** (`browsing.py`) — drives a real browser via `browser-use` as if it were an ordinary first-time user, filling forms with a synthetic `FakePersona`. It is intentionally kept **unaware** that it is part of an anti-scam system or that its credentials are fabricated, and returns a structured `BrowsingResult`.
-2. **Analysis Agent** (`analysis.py`) — consumes the `BrowsingResult` plus `DomainInfo` (WHOIS age/expiry) and emits a `ScamAssessment` with calibrated reasoning, using the `get_domain_info` tool.
+2. **Analysis Agent** (`analysis.py`) — consumes the `BrowsingResult` plus a `StaticSignals` bundle (WHOIS age/expiry, TLS certificate info, DNS) computed by `signals.collect_static_signals(url)` in the pipeline, and emits a `ScamAssessment` with calibrated reasoning. It reads all signals from its input; it calls no tools.
 
 ## The blind-browser invariant (most important constraint)
 
@@ -35,7 +35,7 @@ Models are hardcoded per agent: browsing uses `gpt-4.1-mini`, analysis uses `gpt
 - **Two SDKs, deliberately.** Browsing uses `browser_use.Agent` + `ChatOpenAI`; analysis uses `openai-agents` (`agents.Agent` / `Runner`). Both coerce their LLM output into a Pydantic model (`output_model_schema` / `output_type`). Don't unify these — they serve different stages.
 - **`models.py` is the contract between stages.** `FakePersona` → browsing input; `BrowsingResult` → the structured observation; `ScamAssessment` → final judgment. New pipeline stages should flow through these shapes rather than inventing parallel ones.
 - **Browsing is failure-tolerant by design.** `run_browsing_agent` wraps the run in a timeout (`_TIMEOUT_SECONDS`) and step cap (`_MAX_STEPS`), and on *any* exception, timeout, or missing/unparseable structured output it returns a neutral `_fallback_result` instead of raising — so the pipeline always reaches the Analysis Agent. Preserve this: the analysis stage should never be skipped because browsing hiccuped.
-- **Tools convention** (`tools/handler.py`): each tool is a `@function_tool`-decorated wrapper paired with a plain `_name` implementation (`get_domain_info` / `_get_domain_info`). Tests call the underscore version to bypass the SDK wrapper. `tools/__init__.py` re-exports both — keep that pattern when adding tools.
+- **Tools convention** (`tools/handler.py`): each tool is a `@function_tool`-decorated wrapper paired with a plain `_name` implementation (e.g. `_get_domain_info`, `_get_tls_info`, `_get_dns_info`). Tests call the underscore version to bypass the SDK wrapper. `tools/__init__.py` re-exports both — keep that pattern when adding tools. Note: WHOIS/TLS/DNS data is now collected by `signals.collect_static_signals(url)` and passed to the Analysis Agent as input rather than called by it as a tool.
 - **Domain date math** in `_get_domain_info` normalizes WHOIS creation/expiration dates to `Asia/Taipei` before diffing, so `days_since_creation` / `days_until_expiration` are relative to that zone. Keep new time-based signals consistent with this.
 
 ## Testing notes
