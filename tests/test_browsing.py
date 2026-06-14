@@ -73,6 +73,15 @@ def test_prompt_handles_stale_element_indices():
     assert "currently listed" in low
 
 
+def test_prompt_distinguishes_targeting_miss_from_refusal():
+    # A click that didn't land must be retried on the same intended button, not
+    # treated as the site refusing the action (so flow-critical buttons aren't abandoned).
+    low = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "targeting miss" in low
+    assert "did not land" in low
+    assert "do not abandon" in low
+
+
 def test_prompt_recovers_from_stray_redirect():
     prompt = _build_task_prompt("http://example.com", _persona()).lower()
     assert "go back" in prompt or "previous page" in prompt
