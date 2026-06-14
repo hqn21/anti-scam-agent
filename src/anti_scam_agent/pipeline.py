@@ -1,10 +1,11 @@
-from typing import Literal
+import asyncio
 from urllib.parse import urlparse
 
 from anti_scam_agent.analysis import run_analysis_agent
 from anti_scam_agent.browsing import run_browsing_agent
 from anti_scam_agent.models import Outcome, ScamAssessment
 from anti_scam_agent.persona import generate_persona
+from anti_scam_agent.signals import collect_static_signals
 
 
 def _extract_domain(url: str) -> str:
@@ -17,7 +18,7 @@ async def run_pipeline(url: str) -> ScamAssessment:
 
     # Run 1: a Luhn-invalid card. Acceptance here is the strongest signal.
     result = await run_browsing_agent(url, persona)
-    card_tier: Literal["luhn_invalid", "luhn_valid"] | None = None
+    card_tier: str | None = None
 
     if result.payment_outcome is Outcome.succeeded:
         card_tier = "luhn_invalid"
@@ -31,5 +32,8 @@ async def run_pipeline(url: str) -> ScamAssessment:
         if result.payment_outcome is Outcome.succeeded:
             card_tier = "luhn_valid"
 
+    # Out-of-band local signals (network I/O off the event loop). Failure-tolerant.
+    static_signals = await asyncio.to_thread(collect_static_signals, url)
+
     domain = _extract_domain(url)
-    return await run_analysis_agent(result, domain, card_tier)
+    return await run_analysis_agent(result, domain, card_tier, static_signals)

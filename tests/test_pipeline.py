@@ -4,6 +4,7 @@ import pytest
 
 import anti_scam_agent.pipeline as pipeline
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome, ScamAssessment
+from anti_scam_agent.signals import StaticSignals
 
 
 def _result(payment: Outcome) -> BrowsingResult:
@@ -27,8 +28,8 @@ def _assessment() -> ScamAssessment:
 
 
 def _patch(monkeypatch, payment_sequence):
-    """Make run_browsing_agent return the given outcomes in order; capture analysis args."""
-    calls = {"browse": 0, "cards": [], "card_tier": None}
+    """Stub browsing, analysis, and the static-signal collector; capture args."""
+    calls = {"browse": 0, "cards": [], "card_tier": None, "static": None}
 
     async def fake_browse(url, persona):
         calls["cards"].append(persona.credit_card_number)
@@ -36,12 +37,17 @@ def _patch(monkeypatch, payment_sequence):
         calls["browse"] += 1
         return _result(payment)
 
-    async def fake_analyze(result, domain, card_tier):
+    async def fake_analyze(result, domain, card_tier, static_signals):
         calls["card_tier"] = card_tier
+        calls["static"] = static_signals
         return _assessment()
+
+    def fake_collect(url):
+        return StaticSignals(target_host="shop.test")
 
     monkeypatch.setattr(pipeline, "run_browsing_agent", fake_browse)
     monkeypatch.setattr(pipeline, "run_analysis_agent", fake_analyze)
+    monkeypatch.setattr(pipeline, "collect_static_signals", fake_collect)
     return calls
 
 
@@ -88,3 +94,10 @@ def test_second_run_without_success_leaves_card_tier_none(monkeypatch, second):
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["browse"] == 2
     assert calls["card_tier"] is None
+
+
+def test_static_signals_passed_to_analysis(monkeypatch):
+    calls = _patch(monkeypatch, [Outcome.unclear])
+    asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert isinstance(calls["static"], StaticSignals)
+    assert calls["static"].target_host == "shop.test"
