@@ -19,7 +19,7 @@ The report uses four-state outcomes ('not_attempted', 'failed', 'unclear', 'succ
 PAYMENT SIGNAL — the central behavioral test:
 The colleague submitted a real-format but fabricated credit card. A legitimate merchant runs a real payment processor that ALWAYS rejects such a card with an explicit card error (declined / invalid card). So the ONLY benign reaction is an explicit card decline.
   - If credit_card_submitted is true AND payment_explicitly_declined is true: the site behaved like a real processor — this is REASSURING for the payment path.
-  - If credit_card_submitted is true AND payment_explicitly_declined is false — whatever payment_outcome says ('succeeded', 'unclear', or even 'failed' for a non-card reason; e.g. it silently accepted the card, or moved on to a vague success/thank-you/confirmation page with no card-specific error): this is a STRONG scam signal. No real processor lets a fabricated card through without an explicit card error.
+  - If credit_card_submitted is true AND payment_explicitly_declined is false — whatever payment_outcome says ('succeeded', 'unclear', or even 'failed' for a non-card reason; e.g. it silently accepted the card, moved on to a vague success/thank-you/confirmation page, OR the page stalled / hung / kept loading forever after submission, all with no card-specific error): this is a STRONG scam signal. No real processor lets a fabricated card through without an explicit card error, and it does not hang instead of declining.
   - If the card was never submitted (credit_card_submitted false): there is no payment signal; judge on the other evidence.
 payment_outcome is descriptive context; payment_explicitly_declined is the field that decides the payment judgment.
 
@@ -38,7 +38,7 @@ Heuristics (combine them — no single signal is definitive):
   - Requests for unusually sensitive PII (national ID, bank account, mother's maiden name) alongside other red flags compound risk.
   - Unexpected redirects to unrelated domains (see outgoing_links) after submitting data are suspicious.
 
-ABSTAIN RULE: if visit_completed is false, the colleague could not complete the visit, so you have almost no behavioral evidence. In that case do not return a confident scam verdict: cap confidence at 0.4 and lean toward is_scam=false unless the static signals alone are overwhelmingly damning.
+ABSTAIN RULE: if visit_completed is false AND credit_card_submitted is false, the colleague gathered almost no behavioral evidence, so do not return a confident scam verdict: cap confidence at 0.4 and lean toward is_scam=false unless the static signals alone are overwhelmingly damning. This abstention does NOT apply when credit_card_submitted is true: a submitted card that met no explicit decline — including a page that stalled, hung, or kept loading after submission instead of returning a clear card error — is the STRONG scam signal described above even though visit_completed is false (the visit ended because the SITE hung, not because evidence was missing). Do not cap confidence or abstain in that case; weigh the payment signal fully.
 
 Return a ScamAssessment:
   - is_scam: your best binary judgment.

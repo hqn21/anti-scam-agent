@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -68,17 +69,76 @@ Set visit_completed to true if you ran the flow to a normal conclusion, and fals
 """
 
 
-def _fallback_result(url: str, note: str) -> BrowsingResult:
+def _iter_strings(obj) -> "list[str]":
+    """Flatten all string leaves out of a nested dict/list (e.g. a recorded action)."""
+    out: list[str] = []
+    if isinstance(obj, str):
+        out.append(obj)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            out.extend(_iter_strings(v))
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            out.extend(_iter_strings(v))
+    return out
+
+
+def _card_was_entered(actions: list, card_number: str) -> bool:
+    """Whether the card number was typed into any recorded action (digits-only match)."""
+    target = re.sub(r"\D", "", card_number or "")
+    if len(target) < 12:
+        return False
+    for action in actions:
+        for s in _iter_strings(action):
+            if target in re.sub(r"\D", "", s):
+                return True
+    return False
+
+
+def _salvage_result_from_history(history, url: str, persona: FakePersona, note: str) -> BrowsingResult:
+    """Build a BrowsingResult from whatever the agent managed to do before it stalled
+    or failed, instead of discarding everything.
+
+    Critical for hang-after-submit scams: if the card was entered and the page then
+    never resolved, that must be reported as a submitted card with no explicit decline
+    (a strong signal) — not as 'no payment attempted'.
+    """
+    actions: list = []
+    urls: list = []
+    try:
+        actions = history.model_actions() if history is not None else []
+    except Exception as e:  # noqa: BLE001 — salvage must never raise
+        logger.warning("could not read history actions on %s: %s", url, e)
+    try:
+        urls = history.urls() if history is not None else []
+    except Exception as e:  # noqa: BLE001
+        logger.warning("could not read history urls on %s: %s", url, e)
+
+    card_submitted = _card_was_entered(actions, persona.credit_card_number)
+    events = [note]
+    payment_outcome = Outcome.not_attempted
+    if card_submitted:
+        payment_outcome = Outcome.unclear
+        events.append(
+            "Payment details were submitted, but the page never showed a clear result — "
+            "it appeared to stall or keep loading rather than confirming or rejecting the card."
+        )
+
+    try:
+        outgoing = _external_links(urls, url)
+    except Exception:  # noqa: BLE001
+        outgoing = []
+
     return BrowsingResult(
-        website_summary=f"Unable to complete visit to {url}.",
-        outgoing_links=[],
+        website_summary=f"The visit to {url} could not be completed normally.",
+        outgoing_links=outgoing,
         login_attempted=False,
         login_outcome=Outcome.not_attempted,
-        credit_card_submitted=False,
-        payment_outcome=Outcome.not_attempted,
+        credit_card_submitted=card_submitted,
+        payment_outcome=payment_outcome,
         payment_explicitly_declined=False,
         form_fields_requested=[],
-        unexpected_events=[note],
+        unexpected_events=events,
         visit_completed=False,
     )
 
@@ -152,10 +212,14 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         logger.info(summary)
     except asyncio.TimeoutError:
         logger.warning("browsing agent timed out on %s", url)
-        return _fallback_result(url, f"browsing timed out after {_TIMEOUT_SECONDS}s")
+        return _salvage_result_from_history(
+            getattr(agent, "history", None), url, persona, f"browsing timed out after {_TIMEOUT_SECONDS}s"
+        )
     except Exception as e:
         logger.warning("browsing agent raised on %s: %s", url, e)
-        return _fallback_result(url, f"browsing raised {type(e).__name__}: {e}")
+        return _salvage_result_from_history(
+            getattr(agent, "history", None), url, persona, f"browsing raised {type(e).__name__}: {e}"
+        )
 
     structured = history.structured_output
     result: BrowsingResult | None = None
@@ -166,7 +230,7 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
             result = BrowsingResult.model_validate(structured)
         except Exception as e:
             logger.warning("failed to parse structured dict on %s: %s", url, e)
-            return _fallback_result(url, f"parsing structured output failed: {e}")
+            return _salvage_result_from_history(history, url, persona, f"parsing structured output failed: {e}")
 
     if result is not None:
         try:
@@ -175,5 +239,5 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
             logger.warning("could not derive outgoing_links on %s: %s", url, e)
         return result
 
-    logger.warning("browsing agent returned no structured output on %s; using fallback", url)
-    return _fallback_result(url, "browsing agent produced no structured output")
+    logger.warning("browsing agent returned no structured output on %s; salvaging from history", url)
+    return _salvage_result_from_history(history, url, persona, "browsing agent produced no structured output")
