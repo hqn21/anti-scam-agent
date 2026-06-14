@@ -1,4 +1,4 @@
-from anti_scam_agent.browsing import _build_task_prompt, _fallback_result
+from anti_scam_agent.browsing import _build_task_prompt, _external_links, _fallback_result
 from anti_scam_agent.models import FakePersona, Outcome
 
 
@@ -46,9 +46,6 @@ def test_fallback_marks_visit_incomplete():
     assert result.payment_outcome is Outcome.not_attempted
 
 
-from anti_scam_agent.browsing import _external_links
-
-
 def test_external_links_keeps_only_other_hosts():
     urls = [
         "http://shop.test/",
@@ -63,3 +60,8 @@ def test_external_links_keeps_only_other_hosts():
 
 def test_external_links_empty_when_no_navigation():
     assert _external_links([None, "http://shop.test/"], "http://shop.test") == []
+
+
+def test_external_links_treats_subdomain_as_external():
+    urls = ["https://pay.shop.test/checkout"]
+    assert _external_links(urls, "http://shop.test") == ["pay.shop.test"]
