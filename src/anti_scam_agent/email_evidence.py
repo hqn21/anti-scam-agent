@@ -60,6 +60,8 @@ def _domain_matches(sender_domain: str, target_host: str) -> bool:
     t = target_host.lower().removeprefix("www.")
     if not s or not t:
         return False
+    # bidirectional: sender may be a subdomain of the target (mail.shop.com vs shop.com),
+    # or the target may itself be a subdomain of the sender's registrable domain.
     return s == t or s.endswith("." + t) or t.endswith("." + s)
 
 
@@ -115,6 +117,7 @@ def collect_email_evidence(
                 inbox_id=inbox,
                 after=since,
                 ascending=False,
+                # newest 50 in the post-scan window; ample for attribution, may undercount a spam flood
                 limit=50,
                 include_unauthenticated=True,
             )
