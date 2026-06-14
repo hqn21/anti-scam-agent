@@ -26,6 +26,7 @@ def test_prompt_typos_are_fixed():
     prompt = _build_task_prompt("http://example.com", _persona())
     assert "when for it fully loaded" not in prompt
     assert "wait for it to fully load" in prompt
+    assert "not_attempted" in prompt
 
 
 def test_prompt_does_not_leak_card_tier_or_luhn():
@@ -33,7 +34,8 @@ def test_prompt_does_not_leak_card_tier_or_luhn():
     lowered = prompt.lower()
     assert "luhn" not in lowered
     assert "card_tier" not in lowered
-    # Only the active (primary) card number appears, never the fallback.
+    # The active (primary) card appears; the Luhn-valid fallback never does.
+    assert "4111111111111112" in prompt
     assert "4111111111111111" not in prompt
 
 
