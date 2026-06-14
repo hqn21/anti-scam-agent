@@ -59,6 +59,7 @@ def _fallback_result(url: str, note: str) -> BrowsingResult:
         visit_completed=False,
     )
 
+
 async def run_browsing_agent(url: str, persona: FakePersona) -> BrowsingResult:
     llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)

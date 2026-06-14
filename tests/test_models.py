@@ -8,7 +8,7 @@ def test_browsing_result_has_neutral_fields():
     assert "unexpected_events" in fields
 
 def test_browsing_result_descriptions_are_neutral():
-    leaky_words = {"scam", "phishing", "suspicious", "fake", "fabricated"}
+    leaky_words = {"scam", "phishing", "suspicious", "fake", "fabricated", "luhn", "card_tier"}
     for name, field in BrowsingResult.model_fields.items():
         desc = (field.description or "").lower()
         for word in leaky_words:
