@@ -1,67 +1,13 @@
-import datetime
 from types import SimpleNamespace
+
+import pytest
 
 import anti_scam_agent.email_evidence as ev
 from anti_scam_agent.email_evidence import (
-    EmailEvidence,
-    _domain_matches,
-    _evidence_from_messages,
-    _is_authenticated,
-    _sender_domain,
-    collect_email_evidence,
+    make_client,
     pick_inbox,
+    read_inbox_text,
 )
-
-
-def _msg(from_, labels=(), subject="Welcome", when=None):
-    return SimpleNamespace(
-        from_=from_,
-        labels=list(labels),
-        subject=subject,
-        timestamp=when or datetime.datetime(2026, 6, 14, 12, 0, tzinfo=datetime.timezone.utc),
-    )
-
-
-def test_sender_domain_extraction():
-    assert _sender_domain("No Reply <noreply@mail.Shop.com>") == "mail.shop.com"
-    assert _sender_domain("plain@shop.com") == "shop.com"
-    assert _sender_domain("garbage") == ""
-
-
-def test_domain_matches_exact_and_subdomain():
-    assert _domain_matches("shop.com", "shop.com") is True
-    assert _domain_matches("mail.shop.com", "shop.com") is True
-    assert _domain_matches("shop.com", "checkout.shop.com") is True
-    assert _domain_matches("evil.com", "shop.com") is False
-
-
-def test_is_authenticated_uses_unauthenticated_label():
-    assert _is_authenticated(["inbound"]) is True
-    assert _is_authenticated(["inbound", "unauthenticated"]) is False
-
-
-def test_evidence_from_messages_strong_case():
-    msgs = [_msg("noreply@shop.com", labels=["inbound"])]
-    e = _evidence_from_messages(msgs, "shop.com")
-    assert e.polled is True
-    assert e.message_count == 1
-    assert e.from_target_domain is True
-    assert e.authenticated is True
-
-
-def test_evidence_from_messages_unauthenticated_domain_mail():
-    msgs = [_msg("noreply@shop.com", labels=["inbound", "unauthenticated"])]
-    e = _evidence_from_messages(msgs, "shop.com")
-    assert e.from_target_domain is True
-    assert e.authenticated is False
-
-
-def test_evidence_from_messages_unrelated_only():
-    msgs = [_msg("promo@randomcdn.biz", labels=["inbound"])]
-    e = _evidence_from_messages(msgs, "shop.com")
-    assert e.message_count == 1
-    assert e.from_target_domain is False
-    assert e.authenticated is None
 
 
 def test_pick_inbox_rotates(monkeypatch):
@@ -71,52 +17,75 @@ def test_pick_inbox_rotates(monkeypatch):
     assert picks == ["a@x.to", "b@x.to", "c@x.to", "a@x.to"]
 
 
-def test_collect_email_evidence_early_exits_on_match():
-    since = datetime.datetime(2026, 6, 14, 11, 0, tzinfo=datetime.timezone.utc)
-    calls = {"n": 0}
-
-    class FakeMessages:
-        def list(self, **kwargs):
-            calls["n"] += 1
-            if calls["n"] >= 2:
-                return SimpleNamespace(count=1, messages=[_msg("noreply@shop.com", labels=["inbound"])])
-            return SimpleNamespace(count=0, messages=[])
-
-    client = SimpleNamespace(inboxes=SimpleNamespace(messages=FakeMessages()))
-    e = collect_email_evidence(client, "in@x.to", "shop.com", since, poll_seconds=60, interval=0)
-    assert e.from_target_domain is True
-    assert calls["n"] == 2
+def test_make_client_raises_without_key(monkeypatch):
+    monkeypatch.delenv("AGENTMAIL_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        make_client()
 
 
-def test_collect_email_evidence_failure_tolerant():
-    class Boom:
-        def list(self, **kwargs):
-            raise RuntimeError("api down")
-
-    client = SimpleNamespace(inboxes=SimpleNamespace(messages=Boom()))
-    e = collect_email_evidence(client, "in@x.to", "shop.com",
-                               datetime.datetime.now(datetime.timezone.utc), poll_seconds=0, interval=0)
-    assert isinstance(e, EmailEvidence)
-    assert e.polled is False
+def _msg(from_, text=None, subject="Welcome", message_id="m1"):
+    return SimpleNamespace(from_=from_, subject=subject, text=text, message_id=message_id)
 
 
-def test_collect_email_evidence_keeps_last_on_later_failure():
-    since = datetime.datetime(2026, 6, 14, 11, 0, tzinfo=datetime.timezone.utc)
-    calls = {"n": 0}
+def test_read_inbox_text_returns_recent_message_bodies():
+    msgs = [_msg("noreply@shop.com", text="Your verification code is 482913")]
+    client = SimpleNamespace(
+        inboxes=SimpleNamespace(
+            messages=SimpleNamespace(list=lambda **kw: SimpleNamespace(messages=msgs))
+        )
+    )
+    out = read_inbox_text(client, "in@x.to")
+    assert "482913" in out
+    assert "noreply@shop.com" in out
 
-    class Flaky:
-        def list(self, **kwargs):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                return SimpleNamespace(
-                    count=2,
-                    messages=[_msg("promo@randomcdn.biz", labels=["inbound"]),
-                              _msg("x@other.biz", labels=["inbound"])],
-                )
-            raise RuntimeError("transient")
 
-    client = SimpleNamespace(inboxes=SimpleNamespace(messages=Flaky()))
-    e = collect_email_evidence(client, "in@x.to", "shop.com", since, poll_seconds=30, interval=0)
-    assert e.polled is True            # first poll succeeded
-    assert e.message_count == 2        # its result is preserved despite the later failure
-    assert e.from_target_domain is False
+def test_read_inbox_text_empty_inbox():
+    client = SimpleNamespace(
+        inboxes=SimpleNamespace(
+            messages=SimpleNamespace(list=lambda **kw: SimpleNamespace(messages=[]))
+        )
+    )
+    out = read_inbox_text(client, "in@x.to")
+    assert "No messages" in out
+
+
+def test_read_inbox_text_is_failure_tolerant():
+    def boom(**kw):
+        raise RuntimeError("api down")
+
+    client = SimpleNamespace(
+        inboxes=SimpleNamespace(messages=SimpleNamespace(list=boom))
+    )
+    out = read_inbox_text(client, "in@x.to")
+    assert isinstance(out, str) and out  # benign non-empty string, no raise
+
+
+def test_read_inbox_text_falls_back_to_message_get_for_body():
+    # A summary message with no inline body should trigger the full-message fetch.
+    light = SimpleNamespace(from_="noreply@shop.com", subject="Code", text=None, message_id="m9")
+
+    class Messages:
+        def list(self, **kw):
+            return SimpleNamespace(messages=[light])
+
+        def get(self, inbox_id, message_id):
+            assert message_id == "m9"
+            return SimpleNamespace(text="Your code is 555111")
+
+    client = SimpleNamespace(inboxes=SimpleNamespace(messages=Messages()))
+    out = read_inbox_text(client, "in@x.to")
+    assert "555111" in out
+
+
+def test_read_inbox_text_requests_unauthenticated_mail():
+    seen = {}
+
+    def fake_list(**kw):
+        seen.update(kw)
+        return SimpleNamespace(messages=[])
+
+    client = SimpleNamespace(
+        inboxes=SimpleNamespace(messages=SimpleNamespace(list=fake_list))
+    )
+    read_inbox_text(client, "in@x.to")
+    assert seen.get("include_unauthenticated") is True

@@ -1,13 +1,9 @@
 import logging
 import os
 import threading
-import time
-from datetime import datetime
-from email.utils import parseaddr
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from agentmail import AgentMail
@@ -19,13 +15,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_INBOXES = ["asalpha@agentmail.to", "asbravo@agentmail.to", "ascharlie@agentmail.to"]
 _inbox_index = 0
 _inbox_lock = threading.Lock()
-
-
-class EmailEvidence(BaseModel):
-    polled: bool = False  # did we successfully query the inbox at all
-    message_count: int = 0  # messages received in the post-scan window (volume signal)
-    from_target_domain: bool = False  # received mail whose sender domain matches the target
-    authenticated: bool | None = None  # a domain-matching message passed SPF/DKIM/DMARC; None if none matched
 
 
 def _get_inboxes() -> list[str]:
@@ -49,84 +38,59 @@ def pick_inbox() -> str:
     return inbox
 
 
-def _sender_domain(from_field: str) -> str:
-    addr = parseaddr(from_field)[1]
-    _, _, domain = addr.partition("@")
-    return domain.strip().lower()
-
-
-def _domain_matches(sender_domain: str, target_host: str) -> bool:
-    s = sender_domain.lower().removeprefix("www.")
-    t = target_host.lower().removeprefix("www.")
-    if not s or not t:
-        return False
-    # bidirectional: sender may be a subdomain of the target (mail.shop.com vs shop.com),
-    # or the target may itself be a subdomain of the sender's registrable domain.
-    return s == t or s.endswith("." + t) or t.endswith("." + s)
-
-
-def _is_authenticated(labels: list[str]) -> bool:
-    return "unauthenticated" not in labels
-
-
-def _evidence_from_messages(messages, target_host: str) -> EmailEvidence:
-    matched = [m for m in messages if _domain_matches(_sender_domain(m.from_), target_host)]
-    authenticated: bool | None = None
-    if matched:
-        authenticated = any(_is_authenticated(list(m.labels)) for m in matched)
-    return EmailEvidence(
-        polled=True,
-        message_count=len(messages),
-        from_target_domain=bool(matched),
-        authenticated=authenticated,
-    )
-
-
-def make_client() -> "AgentMail | None":
-    """Return an AgentMail client, or None when unconfigured (email step is skipped)."""
+def make_client() -> "AgentMail":
+    """Return an AgentMail client. AgentMail is mandatory: raise if unconfigured."""
     api_key = os.getenv("AGENTMAIL_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError(
+            "AGENTMAIL_API_KEY is required: the agent routes the persona's email "
+            "through an AgentMail inbox so it can read verification codes mid-flow. "
+            "Set it in .env (see .env.example)."
+        )
+    from agentmail import AgentMail
+
+    return AgentMail(api_key=api_key)
+
+
+def _message_text(client, inbox: str, m) -> str:
+    """Best-effort body text for a message, tolerant of the SDK's exact shape."""
+    for attr in ("text", "preview"):
+        val = getattr(m, attr, None)
+        if val:
+            return str(val)
+    msg_id = getattr(m, "message_id", None) or getattr(m, "id", None)
+    if msg_id is None:
+        return ""
     try:
-        from agentmail import AgentMail
+        full = client.inboxes.messages.get(inbox_id=inbox, message_id=msg_id)
+        return str(getattr(full, "text", "") or getattr(full, "preview", "") or "")
+    except Exception as e:  # noqa: BLE001 — reading mail must never break browsing
+        logger.warning("read_inbox_text get failed for %s: %s", inbox, e)
+        return ""
 
-        return AgentMail(api_key=api_key)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("AgentMail client unavailable: %s", e)
-        return None
 
+def read_inbox_text(client, inbox: str, limit: int = 5) -> str:
+    """Readable text of the most recent inbox messages, for the browsing email tool.
 
-def collect_email_evidence(
-    client,
-    inbox: str,
-    target_host: str,
-    since: datetime,
-    poll_seconds: int = 120,
-    interval: float = 10.0,
-) -> EmailEvidence:
-    """Poll the inbox until a domain-matching message arrives or the window closes.
-
-    Never raises: any failure yields EmailEvidence(polled=False).
-    interval=0 is intended for tests; production callers should keep the default.
+    Failure-tolerant: any error yields a benign string (never raises). Includes
+    unauthenticated mail — scam verification mail is frequently unauthenticated.
     """
-    deadline = time.monotonic() + poll_seconds
-    last: EmailEvidence | None = None
-    while True:
-        try:
-            resp = client.inboxes.messages.list(
-                inbox_id=inbox,
-                after=since,
-                ascending=False,
-                # newest 50 in the post-scan window; ample for attribution, may undercount a spam flood
-                limit=50,
-                include_unauthenticated=True,
-            )
-            last = _evidence_from_messages(list(resp.messages), target_host)
-            if last.from_target_domain:
-                return last  # early exit — got what we came for
-        except Exception as e:  # noqa: BLE001 — email signal must never break the pipeline
-            logger.warning("email evidence poll failed for %s: %s", inbox, e)
-            return last or EmailEvidence(polled=False)
-        if time.monotonic() >= deadline:
-            return last or EmailEvidence(polled=True)
-        time.sleep(interval)
+    try:
+        resp = client.inboxes.messages.list(
+            inbox_id=inbox,
+            ascending=False,
+            limit=limit,
+            include_unauthenticated=True,
+        )
+        messages = list(resp.messages)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("read_inbox_text list failed for %s: %s", inbox, e)
+        return "Could not read the inbox right now; please continue."
+    if not messages:
+        return "No messages in your inbox yet."
+    parts = []
+    for m in messages:
+        subject = getattr(m, "subject", "") or ""
+        body = _message_text(client, inbox, m)
+        parts.append(f"From: {getattr(m, 'from_', '')}\nSubject: {subject}\n{body}".strip())
+    return "\n\n---\n\n".join(parts)
