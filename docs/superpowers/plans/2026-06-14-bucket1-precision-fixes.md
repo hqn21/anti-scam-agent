@@ -597,10 +597,26 @@ and replace the `user_message` assignment with:
     )
 ```
 
+- [ ] **Step 3b: Migrate the live-test fixtures to the new schema**
+
+`tests/test_analysis.py` still constructs `BrowsingResult` with the removed `login_succeeded`/`credit_card_accepted` kwargs. Pydantic silently drops unknown kwargs, so these fixtures currently fall back to `Outcome.not_attempted` — which guts the `OBVIOUS_SCAM` signal. Fix both fixtures and the import.
+
+Change the import line:
+
+```python
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment
+```
+
+In `OBVIOUS_SCAM`, replace `login_succeeded=True,` with `login_outcome=Outcome.succeeded,` and `credit_card_accepted=True,` with `payment_outcome=Outcome.succeeded,`.
+
+In `OBVIOUS_LEGIT`, replace `login_succeeded=False,` with `login_outcome=Outcome.not_attempted,` and `credit_card_accepted=False,` with `payment_outcome=Outcome.not_attempted,`.
+
+(Leave `login_attempted` / `credit_card_submitted` as they are; `visit_completed` defaults to `True`, which is correct for both fixtures. The `_run` helper does not need `card_tier` since it defaults to `None`.)
+
 - [ ] **Step 4: Run the offline guard to verify it passes**
 
 Run: `uv run pytest tests/test_analysis.py::test_run_analysis_agent_accepts_card_tier -v`
-Expected: PASS.
+Expected: PASS. Also confirm the file imports/collects cleanly: `uv run pytest tests/test_analysis.py --collect-only -q` (no `TypeError` from the fixtures).
 
 - [ ] **Step 5: Commit**
 
