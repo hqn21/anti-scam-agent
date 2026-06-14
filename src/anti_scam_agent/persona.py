@@ -26,7 +26,7 @@ def generate_persona() -> FakePersona:
     card_type = random.choice(["visa", "mastercard", "amex", "discover"])
     valid_card = _faker.credit_card_number(card_type=card_type)
     cvv_len = 4 if card_type == "amex" else 3
-    phone = _faker.phone_number().split("x")[0].strip()
+    phone = re.split(r"x", _faker.phone_number(), flags=re.IGNORECASE)[0].strip()
     return FakePersona(
         name=name,
         email=_email_from_name(name),
