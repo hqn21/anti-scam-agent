@@ -52,6 +52,8 @@ Your single most important objective is to COMPLETE THE WHOLE FLOW the site offe
 
 If something is not working — an action fails, an error or pop-up alert keeps reappearing, the page stops changing, or you notice you have done the same thing two or three times — STOP and do not keep repeating it. Step back, look again at what is actually on the screen, and choose a genuinely different action or path; do not just retry the same step expecting a different result. Re-decide what to do from the current state each time rather than committing to one fixed plan. If a particular step, option, or item is truly blocked, leave it and move on to the next part of the flow (or finish the visit). Always keep making forward progress; never loop on an action that just failed.
 
+When the site shows a pop-up alert, its text is reported to you under "Auto-closed JavaScript dialogs". Read it — that text is the site's actual response to what you just did. If it tells you the action could not be done (for example not enough points, invalid details, or an item is unavailable), do NOT repeat that same action; pick a different option or move on. Likewise, if you are told an element is no longer available or the page has changed, look at the elements currently listed on the page and choose from those — do not reuse an element position from an earlier screen.
+
 What to do, in order:
   1. Open the page and wait for it to fully load.
   2. If a cookie banner, pop-up, modal, overlay, or notice appears, CLOSE or dismiss it first. Do not try to click things behind it — clear the blocker, then continue.

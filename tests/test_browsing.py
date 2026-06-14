@@ -59,6 +59,20 @@ def test_prompt_breaks_out_of_failed_action_loops():
     assert "forward progress" in prompt
 
 
+def test_prompt_heeds_autoclosed_dialog_messages():
+    prompt = _build_task_prompt("http://example.com", _persona())
+    low = prompt.lower()
+    # the agent is pointed at where the alert text appears and told to obey it
+    assert "auto-closed javascript dialogs" in low
+    assert "do not repeat" in low
+
+
+def test_prompt_handles_stale_element_indices():
+    low = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "no longer available" in low or "page has changed" in low
+    assert "currently listed" in low
+
+
 def test_prompt_recovers_from_stray_redirect():
     prompt = _build_task_prompt("http://example.com", _persona()).lower()
     assert "go back" in prompt or "previous page" in prompt
