@@ -42,6 +42,17 @@ def test_prompt_does_not_leak_card_tier_or_luhn():
     assert "4111111111111111" in prompt  # the card the agent is given
 
 
+def test_prompt_breaks_out_of_failed_action_loops():
+    # General (not case-specific): stop repeating a failing action, re-assess, and
+    # either try something different or move on — never loop on a failed action.
+    prompt = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "keep repeating" in prompt
+    assert "two or three times" in prompt
+    assert "re-decide" in prompt or "step back" in prompt
+    assert "blocked" in prompt
+    assert "forward progress" in prompt
+
+
 def test_prompt_recovers_from_stray_redirect():
     prompt = _build_task_prompt("http://example.com", _persona()).lower()
     assert "go back" in prompt or "previous page" in prompt
