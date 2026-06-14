@@ -9,7 +9,9 @@ Anti-Scam Agent detects phishing / scam websites (e-commerce, lottery / prize-cl
 The system is two LLM agents wired in sequence by `pipeline.py`:
 
 1. **Browsing Agent** (`browsing.py`) — drives a real browser via `browser-use` as if it were an ordinary first-time user, filling forms with a synthetic `FakePersona`. It is intentionally kept **unaware** that it is part of an anti-scam system or that its credentials are fabricated, and returns a structured `BrowsingResult`.
-2. **Analysis Agent** (`analysis.py`) — consumes the `BrowsingResult` plus a `StaticSignals` bundle (WHOIS age/expiry, TLS certificate info, DNS) computed by `signals.collect_static_signals(url)` in the pipeline, and emits a `ScamAssessment` with calibrated reasoning. It reads all signals from its input; it calls no tools.
+2. **Analysis Agent** (`analysis.py`) — consumes the `BrowsingResult`, a `StaticSignals` bundle (WHOIS age/expiry, TLS certificate info, DNS) computed by `signals.collect_static_signals(url)`, and (when AgentMail is configured) an `EmailEvidence` object, and emits a `ScamAssessment` with calibrated reasoning. It reads all signals from its input; it calls no tools.
+
+When `AGENTMAIL_API_KEY` is set, the pipeline routes the persona's email through one of the rotating AgentMail inboxes (`AGENTMAIL_INBOXES`) before browsing — the blind agent just sees an ordinary address — then, after the visit, polls that inbox (`email_evidence.collect_email_evidence`, off the event loop, time-boxed by `AGENTMAIL_POLL_SECONDS`) for mail whose sender domain matches the target and checks SPF/DKIM/DMARC (via AgentMail's `unauthenticated` label). A genuine authenticated transactional email is the system's strongest *exoneration* signal. Without `AGENTMAIL_API_KEY` the email step is cleanly skipped and the persona keeps its generated address.
 
 ## The blind-browser invariant (most important constraint)
 
