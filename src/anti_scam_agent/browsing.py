@@ -14,7 +14,6 @@ from anti_scam_agent.email_evidence import read_inbox_text
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome
 from anti_scam_agent.reporting import (
     CallSample,
-    LLMCallMetrics,
     StageReport,
     StepRecord,
     StepWindow,
