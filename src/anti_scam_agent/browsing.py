@@ -19,11 +19,17 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_MAX_STEPS = 70
+_MAX_STEPS = 100
 _TIMEOUT_SECONDS = 480  # 8 minutes
-# One action per step: the DOM (and its click indices) is re-serialized before every
-# action, so a click can never fire against a stale index from before the page changed.
-_MAX_ACTIONS_PER_STEP = 1
+# A few actions per step: fewer LLM round-trips, so the agent gets further within the
+# wall-clock timeout, plus more "action budget" to recover when something goes wrong.
+# This is safe for navigations — browser_use's multi_act aborts the rest of a step when
+# an action changes the URL or focus target (or is a navigate/search/go_back). It does
+# NOT catch same-URL in-place DOM re-renders (SPA / client-rendered pages), so we keep
+# the count modest (3, vs the framework default of 5) to bound the blast radius of a
+# stale-index click; flow-critical buttons can still be hit via click_by_visible_text,
+# which bypasses indices entirely. Drop back toward 1 if dynamic pages start mis-clicking.
+_MAX_ACTIONS_PER_STEP = 3
 
 # JavaScript backing the click_by_visible_text tool. It walks every shadow root (so it
 # also finds buttons in client-rendered / web-component pages that the framework's DOM
