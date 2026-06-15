@@ -196,3 +196,53 @@ def test_run_debug_log_captures_root_logging_then_detaches(tmp_path):
         logging.getLogger("anti_scam_agent.something").warning("captured line")
     assert "captured line" in debug_file.read_text()
     assert len(root.handlers) == before
+
+
+from anti_scam_agent.reporting import render_prediction_yaml, append_prediction_ledger
+
+
+def _prediction_run(domain="shop.test", verdict="likely_scam", is_scam=True, scam_type="fake lottery"):
+    return RunReport.build(
+        target_domain=domain, url=f"http://{domain}",
+        started_at="2026-06-15T18:30:12+08:00", duration_s=1.0,
+        stages=[], verdict=verdict, is_scam=is_scam, scam_type=scam_type,
+    )
+
+
+def test_render_prediction_yaml_has_label_is_scam_and_scam_type():
+    y = render_prediction_yaml(_prediction_run())
+    assert "target: shop.test" in y
+    assert "verdict: likely_scam" in y
+    assert "is_scam: true" in y
+    assert "scam_type: fake lottery" in y
+
+
+def test_render_prediction_yaml_null_scam_type_and_false():
+    y = render_prediction_yaml(_prediction_run(domain="safe.com", verdict="legitimate", is_scam=False, scam_type=None))
+    assert "is_scam: false" in y
+    assert "scam_type: null" in y
+
+
+def test_render_prediction_yaml_quotes_risky_scam_type():
+    # a value containing ": " must be quoted so the YAML stays valid/unambiguous.
+    y = render_prediction_yaml(_prediction_run(scam_type="phishing: bank impersonation"))
+    assert 'scam_type: "phishing: bank impersonation"' in y
+
+
+def test_write_run_report_writes_prediction_yml_and_appends_ledger(tmp_path):
+    import json
+    f1 = write_run_report(_prediction_run(), logs_root=tmp_path)
+    f2 = write_run_report(
+        _prediction_run(domain="safe.com", verdict="legitimate", is_scam=False, scam_type=None),
+        logs_root=tmp_path,
+    )
+    assert (f1 / "prediction.yml").exists()
+    assert (f2 / "prediction.yml").exists()
+    assert "verdict: likely_scam" in (f1 / "prediction.yml").read_text()
+
+    ledger_lines = (tmp_path / "predictions.jsonl").read_text().strip().splitlines()
+    assert len(ledger_lines) == 2
+    rec0 = json.loads(ledger_lines[0])
+    assert rec0["target"] == "shop.test" and rec0["verdict"] == "likely_scam" and rec0["is_scam"] is True
+    rec1 = json.loads(ledger_lines[1])
+    assert rec1["is_scam"] is False and rec1["scam_type"] is None

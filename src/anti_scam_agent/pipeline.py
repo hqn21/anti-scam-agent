@@ -60,6 +60,7 @@ async def run_pipeline(url: str, verbose: bool = False) -> ScamAssessment:
             stages=[browsing_stage, signals_stage, analysis_stage],
             verdict=assessment.verdict.value,
             is_scam=assessment.is_scam,
+            scam_type=assessment.scam_type,
         )
         folder = write_run_report(report, logs_root=_LOGS_ROOT, verbose=verbose)
 
