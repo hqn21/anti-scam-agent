@@ -123,3 +123,51 @@ def test_attribute_calls_no_windows_all_other():
     per_step, other = attribute_calls(calls, [])
     assert per_step == {}
     assert other.input_tokens == 100
+
+
+from anti_scam_agent.reporting import render_json, render_log
+
+
+def _sample_run() -> RunReport:
+    steps = [_step(1), _step(2)]
+    browsing = StageReport.build("browsing", "gpt-4.1", 10.0, steps, LLMCallMetrics())
+    analysis = StageReport.build("analysis", "gpt-4.1", 2.0, [_step(3)], LLMCallMetrics())
+    signals = StageReport.build("signals", None, 5.0, [], LLMCallMetrics())
+    return RunReport.build(
+        target_domain="example.com", url="http://example.com",
+        started_at="2026-06-15T18:30:12+08:00", duration_s=17.0,
+        stages=[browsing, signals, analysis], verdict="likely_scam", is_scam=True,
+    )
+
+
+def test_render_json_roundtrips():
+    import json
+    run = _sample_run()
+    parsed = json.loads(render_json(run))
+    assert parsed["target_domain"] == "example.com"
+    assert parsed["grand_total"]["total_tokens"] == run.grand_total.total_tokens
+    assert parsed["stages"][0]["steps"][0]["thinking"] == "thinking text"
+
+
+def test_render_log_concise_omits_full_thinking_but_keeps_eval_goal():
+    text = render_log(_sample_run(), verbose=False)
+    assert "Anti-Scam Run" in text
+    assert "example.com" in text
+    assert "Stage: browsing" in text
+    assert "Stage: signals" in text and "no LLM" in text
+    assert "likely_scam" in text
+    assert "goal text" in text
+    assert "thinking text" not in text
+
+
+def test_render_log_verbose_includes_full_thinking():
+    text = render_log(_sample_run(), verbose=True)
+    assert "thinking text" in text
+
+
+def test_render_log_marks_unknown_pricing():
+    steps = [_step(1, model="mystery")]
+    stage = StageReport.build("browsing", "mystery", 1.0, steps, LLMCallMetrics())
+    run = RunReport.build("e.com", "http://e.com", "2026-06-15T18:30:12+08:00", 1.0, [stage], "uncertain", False)
+    text = render_log(run, verbose=False)
+    assert "pricing unknown" in text
