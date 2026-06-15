@@ -188,3 +188,68 @@ def attribute_calls(
             per_step_calls[window.step_number].append(m)
     per_step = {n: combine_metrics(ms) for n, ms in per_step_calls.items()}
     return per_step, combine_metrics(other_calls)
+
+
+def render_json(run: RunReport) -> str:
+    return run.model_dump_json(indent=2)
+
+
+def _fmt_cost(cost: float | None) -> str:
+    return "(pricing unknown)" if cost is None else f"${cost:.4f}"
+
+
+def _fmt_metrics(m: LLMCallMetrics) -> str:
+    return (
+        f"{_fmt_cost(m.cost_usd)}   {m.total_tokens:,} tok "
+        f"(in {m.input_tokens:,} / cached {m.cached_input_tokens:,} / out {m.output_tokens:,})"
+    )
+
+
+def render_log(run: RunReport, verbose: bool = False) -> str:
+    lines: list[str] = []
+    lines.append("================ Anti-Scam Run ================")
+    lines.append(f"Target   : {run.target_domain}  ({run.url})")
+    lines.append(f"Started  : {run.started_at}")
+    lines.append(f"Duration : {run.duration_s:.1f}s")
+    lines.append(f"Cost     : {_fmt_metrics(run.grand_total)}")
+    lines.append(f"Verdict  : {run.verdict}   (is_scam={run.is_scam})")
+    lines.append("")
+
+    for stage in run.stages:
+        if stage.model is None and not stage.steps:
+            lines.append(f"-- Stage: {stage.name:<10} {stage.duration_s:.1f}s   (no LLM)")
+        else:
+            lines.append(
+                f"-- Stage: {stage.name:<10} {stage.duration_s:.1f}s   "
+                f"{_fmt_cost(stage.totals.cost_usd)}   {stage.totals.total_tokens:,} tok   model={stage.model}"
+            )
+        if stage.note:
+            lines.append(f"   note: {stage.note}")
+        for step in stage.steps:
+            actions = ",".join(step.action_types) or "-"
+            lines.append(
+                f"   step {step.step_number:02d}  {step.duration_s:.1f}s  {actions:<24} "
+                f"{step.metrics.total_tokens:,} tok  {_fmt_cost(step.metrics.cost_usd)}"
+            )
+            if step.evaluation:
+                lines.append(f"     eval : {step.evaluation}")
+            if step.next_goal:
+                lines.append(f"     goal : {step.next_goal}")
+            for err in step.result_errors:
+                lines.append(f"     ! result error: {err}")
+            if verbose and step.thinking:
+                for tline in step.thinking.splitlines():
+                    lines.append(f"     | {tline}")
+        if stage.other_metrics.total_tokens:
+            lines.append(
+                f"   (other LLM calls not tied to a step: {stage.other_metrics.total_tokens:,} tok, "
+                f"{_fmt_cost(stage.other_metrics.cost_usd)})"
+            )
+        lines.append("")
+
+    per_stage = " / ".join(f"{s.name} {s.duration_s:.1f}" for s in run.stages)
+    lines.append("================ Totals ================")
+    lines.append(f"LLM cost : {_fmt_cost(run.grand_total.cost_usd)}      LLM tokens: {run.grand_total.total_tokens:,}")
+    lines.append(f"Wall time: {run.duration_s:.1f}s       ({per_stage})")
+    lines.append("===============================================")
+    return "\n".join(lines) + "\n"
