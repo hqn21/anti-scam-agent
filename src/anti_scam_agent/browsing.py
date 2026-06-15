@@ -23,6 +23,34 @@ _TIMEOUT_SECONDS = 480  # 8 minutes
 # action, so a click can never fire against a stale index from before the page changed.
 _MAX_ACTIONS_PER_STEP = 1
 
+# A ready-made snippet for the `evaluate` action. Some pages render their real button
+# late and into a shadow subtree, so the framework's numbering keeps resolving to a
+# neighbouring element. This walks every shadow root, finds the clickable element whose
+# visible text matches a label, and clicks it directly — bypassing the numbering.
+# Kept as a module constant (not inlined into the f-string) so its braces are an
+# interpolated value, not part of the format string.
+_JS_CLICK_BY_TEXT = """(() => {
+  const label = 'Exchange';  // <-- change to the exact visible text of the button you want
+  const nodes = [];
+  const walk = (root) => {
+    root.querySelectorAll('*').forEach((el) => {
+      nodes.push(el);
+      if (el.shadowRoot) walk(el.shadowRoot);
+    });
+  };
+  walk(document);
+  const clickable = (el) =>
+    el.tagName === 'BUTTON' || el.type === 'submit' || el.getAttribute('role') === 'button' || !!el.onclick;
+  const text = (el) => (el.innerText || el.textContent || '').trim();
+  const exact = nodes.filter((el) => clickable(el) && text(el) === label);
+  const partial = nodes
+    .filter((el) => clickable(el) && text(el).includes(label))
+    .sort((a, b) => text(a).length - text(b).length);
+  const hit = exact[0] || partial[0];
+  if (hit) { hit.scrollIntoView({ block: 'center' }); hit.click(); return 'clicked: ' + label; }
+  return 'no clickable element found with text: ' + label;
+})()"""
+
 
 def _build_task_prompt(url: str, persona: FakePersona) -> str:
     """Build a strictly user-framed task prompt.
@@ -31,6 +59,7 @@ def _build_task_prompt(url: str, persona: FakePersona) -> str:
     terms that could reveal the true purpose of the visit.
     The agent must not suspect it is being used for anti-scam analysis.
     """
+    js_click_by_text = _JS_CLICK_BY_TEXT
     return f"""You are visiting the website {url} as an interested first-time user who wants to go all the way through whatever the site offers.
 
 Here is the information about you, which you may use to fill in any forms the site asks you to complete:
@@ -56,7 +85,11 @@ When the site shows a pop-up alert, its text is reported to you under "Auto-clos
 
 Tell apart two different kinds of "failure". (a) The SITE refused you — an alert/error said so, or nothing changed after a real action: change approach or move on, as above. (b) Your click simply did not land — you were told the element is no longer available or the page changed, or you clicked the wrong neighbouring element (for example a quantity +/- instead of the button you meant). A click that did not land is a targeting miss, NOT a refusal: re-read the elements currently listed on the page, find the SAME button you intended (by its visible label), and click it again. Do not abandon an important step — such as a final 'Exchange', 'Checkout', 'Confirm', or 'Pay' button — just because it took a few tries to land the click; keep re-locating and clicking that intended button until it actually registers or the site itself gives you a clear response.
 
-If clicking that button by its number keeps landing on the wrong element (for example a nearby +/-) more than twice, the numbering for it is unreliable — STOP clicking it by number. Instead: use the find_text action to scroll the exact label (for example 'Exchange') into view and try once more; and if it still will not click, use the evaluate action to run JavaScript that finds the element whose visible text matches the button label and calls .click() on it directly. This bypasses the numbering and clicks the button you can actually see.
+If clicking that button by its number keeps landing on the wrong element (for example a nearby +/-) more than twice, the numbering for it is unreliable — STOP clicking it by number. Instead: use the find_text action to scroll the exact label (for example 'Exchange') into view and try once more; and if it still will not click, use the evaluate action to run this exact JavaScript (it searches the page, including content rendered inside shadow roots, for the clickable element whose visible text matches and calls .click() on it directly) — change only the label string on the first line to the visible text of the button you want:
+
+{js_click_by_text}
+
+This bypasses the numbering and clicks the button you can actually see. After running it, read the value it returned: 'clicked: ...' means it worked (check the page advanced); 'no clickable element found ...' means the label text was wrong — look again at the button's exact visible text and adjust the label.
 
 On a long page that loads more items as you scroll (the list keeps growing when you reach the bottom), first scroll all the way down and wait until the list stops growing, THEN click a final button like 'Exchange'/'Checkout'/'Pay'. Clicking while the page is still loading more content makes the button move and your click miss.
 
