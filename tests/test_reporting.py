@@ -1,3 +1,5 @@
+import pytest
+
 from anti_scam_agent.reporting import LLMCallMetrics, cost_usd, combine_metrics
 
 
@@ -92,3 +94,32 @@ def test_run_report_grand_total_equals_sum_of_stages():
     expected = combine_metrics([s1.totals, s2.totals])
     assert run.grand_total.total_tokens == expected.total_tokens
     assert run.grand_total.cost_usd == expected.cost_usd
+
+
+from anti_scam_agent.reporting import CallSample, StepWindow, attribute_calls
+
+
+def test_attribute_calls_buckets_by_window_and_collects_leftovers():
+    windows = [StepWindow(step_number=1, start=0.0, end=10.0), StepWindow(step_number=2, start=10.0, end=20.0)]
+    calls = [
+        CallSample(timestamp=1.0, model="gpt-4.1", prompt_tokens=1000, cached_input_tokens=0, output_tokens=100),
+        CallSample(timestamp=5.0, model="gpt-4.1", prompt_tokens=2000, cached_input_tokens=0, output_tokens=200),
+        CallSample(timestamp=12.0, model="gpt-4.1", prompt_tokens=3000, cached_input_tokens=0, output_tokens=300),
+        CallSample(timestamp=25.0, model="gpt-4.1", prompt_tokens=4000, cached_input_tokens=0, output_tokens=400),
+    ]
+    per_step, other = attribute_calls(calls, windows)
+    assert per_step[1].input_tokens == 3000
+    assert per_step[2].input_tokens == 3000
+    assert other.input_tokens == 4000
+    grand = combine_metrics(list(per_step.values()) + [other])
+    each = combine_metrics([LLMCallMetrics.from_counts(c.model, c.prompt_tokens, c.cached_input_tokens, c.output_tokens) for c in calls])
+    assert grand.total_tokens == each.total_tokens
+    # float addition is non-associative; the two groupings differ only in last-bit rounding.
+    assert grand.cost_usd == pytest.approx(each.cost_usd)
+
+
+def test_attribute_calls_no_windows_all_other():
+    calls = [CallSample(timestamp=1.0, model="gpt-4.1", prompt_tokens=100, cached_input_tokens=0, output_tokens=10)]
+    per_step, other = attribute_calls(calls, [])
+    assert per_step == {}
+    assert other.input_tokens == 100
