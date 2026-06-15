@@ -1,10 +1,12 @@
 import asyncio
+import json
 import logging
 import re
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from browser_use import Agent as BrowserAgent, ChatOpenAI, Browser, Tools
+from browser_use.browser import BrowserSession
 from dotenv import load_dotenv
 
 from anti_scam_agent.email_evidence import read_inbox_text
@@ -23,14 +25,14 @@ _TIMEOUT_SECONDS = 480  # 8 minutes
 # action, so a click can never fire against a stale index from before the page changed.
 _MAX_ACTIONS_PER_STEP = 1
 
-# A ready-made snippet for the `evaluate` action. Some pages render their real button
-# late and into a shadow subtree, so the framework's numbering keeps resolving to a
-# neighbouring element. This walks every shadow root, finds the clickable element whose
-# visible text matches a label, and clicks it directly — bypassing the numbering.
-# Kept as a module constant (not inlined into the f-string) so its braces are an
-# interpolated value, not part of the format string.
-_JS_CLICK_BY_TEXT = """(() => {
-  const label = 'Exchange';  // <-- change to the exact visible text of the button you want
+# JavaScript backing the click_by_visible_text tool. It walks every shadow root (so it
+# also finds buttons in client-rendered / web-component pages that the framework's DOM
+# numbering misses or mis-targets), then clicks the clickable element whose visible text
+# matches the label — exact match first, else the shortest element that contains it.
+# __LABEL__ is replaced with a json.dumps-encoded string at call time, so any label works
+# and the value is safely quoted; the label is never hardcoded.
+_CLICK_BY_TEXT_JS = """(() => {
+  const label = __LABEL__;
   const nodes = [];
   const walk = (root) => {
     root.querySelectorAll('*').forEach((el) => {
@@ -59,7 +61,6 @@ def _build_task_prompt(url: str, persona: FakePersona) -> str:
     terms that could reveal the true purpose of the visit.
     The agent must not suspect it is being used for anti-scam analysis.
     """
-    js_click_by_text = _JS_CLICK_BY_TEXT
     return f"""You are visiting the website {url} as an interested first-time user who wants to go all the way through whatever the site offers.
 
 Here is the information about you, which you may use to fill in any forms the site asks you to complete:
@@ -85,11 +86,7 @@ When the site shows a pop-up alert, its text is reported to you under "Auto-clos
 
 Tell apart two different kinds of "failure". (a) The SITE refused you — an alert/error said so, or nothing changed after a real action: change approach or move on, as above. (b) Your click simply did not land — you were told the element is no longer available or the page changed, or you clicked the wrong neighbouring element (for example a quantity +/- instead of the button you meant). A click that did not land is a targeting miss, NOT a refusal: re-read the elements currently listed on the page, find the SAME button you intended (by its visible label), and click it again. Do not abandon an important step — such as a final 'Exchange', 'Checkout', 'Confirm', or 'Pay' button — just because it took a few tries to land the click; keep re-locating and clicking that intended button until it actually registers or the site itself gives you a clear response.
 
-If clicking that button by its number keeps landing on the wrong element (for example a nearby +/-) more than twice, the numbering for it is unreliable — STOP clicking it by number. Instead: use the find_text action to scroll the exact label (for example 'Exchange') into view and try once more; and if it still will not click, use the evaluate action to run this exact JavaScript (it searches the page, including content rendered inside shadow roots, for the clickable element whose visible text matches and calls .click() on it directly) — change only the label string on the first line to the visible text of the button you want:
-
-{js_click_by_text}
-
-This bypasses the numbering and clicks the button you can actually see. After running it, read the value it returned: 'clicked: ...' means it worked (check the page advanced); 'no clickable element found ...' means the label text was wrong — look again at the button's exact visible text and adjust the label.
+If clicking that button by its number keeps landing on the wrong element (for example a nearby +/-) more than twice, the numbering for it is unreliable — STOP clicking it by number. Instead use the "Click a button by its visible text" tool, passing the exact visible label of the button you want (for example 'Exchange', 'Checkout', 'Pay', or 'Confirm'). It finds the button by its text — including buttons drawn by the page itself that the numbering cannot target — and clicks it directly. (You can use the find_text action first to scroll the label into view.) After calling the tool, read what it returned: 'clicked: ...' means it worked, so check whether the page advanced; 'no clickable element found ...' means the label text did not match, so look again at the button's exact visible text and try the tool again with the corrected label.
 
 On a long page that loads more items as you scroll (the list keeps growing when you reach the bottom), first scroll all the way down and wait until the list stops growing, THEN click a final button like 'Exchange'/'Checkout'/'Pay'. Clicking while the page is still loading more content makes the button move and your click miss.
 
@@ -203,9 +200,10 @@ def _external_links(urls: list[str | None], target_url: str) -> list[str]:
     return links
 
 
-def _build_email_tools(client: "AgentMail", inbox: str) -> Tools:
-    """A neutral 'read your inbox' tool. client + inbox are closure-captured so they
-    never appear in the LLM-facing action schema (preserving the blind invariant)."""
+def _build_tools(client: "AgentMail", inbox: str) -> Tools:
+    """The custom tools handed to the Browsing Agent. Descriptions stay neutral and any
+    privileged values (client + inbox) are closure-captured so they never appear in the
+    LLM-facing action schema (preserving the blind invariant)."""
     tools = Tools()
 
     @tools.action(
@@ -214,6 +212,23 @@ def _build_email_tools(client: "AgentMail", inbox: str) -> Tools:
     )
     async def read_email_inbox() -> str:
         return await asyncio.to_thread(read_inbox_text, client, inbox)
+
+    @tools.action(
+        "Click a button or control by its exact visible text instead of by its number. "
+        "Use this when clicking by number keeps landing on the wrong element. Pass the "
+        "label shown on the button you want, e.g. 'Exchange', 'Checkout', 'Pay'. Returns "
+        "'clicked: <label>' if it found and clicked it, or 'no clickable element found ...' "
+        "if nothing on the page has that exact visible text."
+    )
+    async def click_by_visible_text(text: str, browser_session: BrowserSession) -> str:
+        code = _CLICK_BY_TEXT_JS.replace("__LABEL__", json.dumps(text))
+        cdp_session = await browser_session.get_or_create_cdp_session()
+        result = await cdp_session.cdp_client.send.Runtime.evaluate(
+            params={"expression": code, "returnByValue": True, "awaitPromise": True},
+            session_id=cdp_session.session_id,
+        )
+        value = result.get("result", {}).get("value")
+        return str(value) if value is not None else "click attempt returned no result"
 
     return tools
 
@@ -243,7 +258,7 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         browser=browser,
         use_vision=True,
         output_model_schema=BrowsingResult,
-        tools=_build_email_tools(client, inbox),
+        tools=_build_tools(client, inbox),
         max_actions_per_step=_MAX_ACTIONS_PER_STEP,
     )
 
