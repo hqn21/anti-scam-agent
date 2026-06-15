@@ -35,9 +35,20 @@ class BrowsingResult(BaseModel):
     unexpected_events: Annotated[list[str], Field(description="Anything that happened during the visit that an ordinary user would find surprising (e.g. 'redirected to an unrelated domain', 'payment confirmation page appeared instantly without a processor redirect').")]
     visit_completed: Annotated[bool, Field(default=True, description="Whether the visit ran to a normal conclusion rather than being cut short.")]
 
+class Verdict(str, Enum):
+    scam = "scam"
+    likely_scam = "likely_scam"
+    uncertain = "uncertain"
+    likely_legitimate = "likely_legitimate"
+    legitimate = "legitimate"
+
 class ScamAssessment(BaseModel):
-    is_scam: Annotated[bool, Field(description="True if the site is assessed to be a scam or phishing site.")]
-    confidence: Annotated[float, Field(ge=0.0, le=1.0, description="Confidence score from 0.0 (not confident) to 1.0 (very confident).")]
-    scam_type: Annotated[str | None, Field(description="Category of scam, e.g. 'phishing', 'fake lottery', 'credit card harvesting'. None if not a scam.")]
+    verdict: Annotated[Verdict, Field(description="Ordinal scam judgment from 'scam' (most scam-like) through 'uncertain' to 'legitimate' (most legitimate).")]
+    scam_type: Annotated[str | None, Field(description="Category of scam, e.g. 'phishing', 'fake lottery', 'credit card harvesting'. None if not scam-leaning.")]
     reasoning: Annotated[str, Field(description="Detailed explanation of the assessment, citing specific evidence.")]
-    risk_factors: Annotated[list[str], Field(description="Specific observations that contributed to the risk assessment.")]
+    risk_factors: Annotated[list[str], Field(description="Specific observations that contributed to the judgment.")]
+
+    @property
+    def is_scam(self) -> bool:
+        """Binary collapse for evaluation; 'uncertain' maps to not-scam (conservative)."""
+        return self.verdict in {Verdict.scam, Verdict.likely_scam}

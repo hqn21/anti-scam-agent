@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 import anti_scam_agent.pipeline as pipeline
-from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment, Verdict
 from anti_scam_agent.signals import StaticSignals
 
 
@@ -23,7 +23,7 @@ def _result(payment: Outcome) -> BrowsingResult:
 
 def _assessment() -> ScamAssessment:
     return ScamAssessment(
-        is_scam=False, confidence=0.1, scam_type=None, reasoning="r", risk_factors=[]
+        verdict=Verdict.legitimate, scam_type=None, reasoning="r", risk_factors=[]
     )
 
 
