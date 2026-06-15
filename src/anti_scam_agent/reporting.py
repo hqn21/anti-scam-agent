@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+import json
 import logging
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -135,6 +137,7 @@ class RunReport(BaseModel):
     grand_total: LLMCallMetrics = LLMCallMetrics()
     verdict: str | None = None
     is_scam: bool | None = None
+    scam_type: str | None = None
 
     @classmethod
     def build(
@@ -146,6 +149,7 @@ class RunReport(BaseModel):
         stages: list[StageReport],
         verdict: str | None,
         is_scam: bool | None,
+        scam_type: str | None = None,
     ) -> "RunReport":
         grand_total = combine_metrics([s.totals for s in stages])
         return cls(
@@ -157,6 +161,7 @@ class RunReport(BaseModel):
             grand_total=grand_total,
             verdict=verdict,
             is_scam=is_scam,
+            scam_type=scam_type,
         )
 
 
@@ -260,14 +265,64 @@ def render_log(run: RunReport, verbose: bool = False) -> str:
     return "\n".join(lines) + "\n"
 
 
+# A scalar is safe to emit unquoted in YAML when it starts alphanumeric and uses only a
+# small set of punctuation. URLs and ISO timestamps qualify (their ':' is never ': ').
+_YAML_SAFE = re.compile(r"^[A-Za-z0-9][\w .,@:/+-]*$")
+
+
+def _yaml_scalar(value: object) -> str:
+    """Render a scalar as a valid YAML value. None -> null, bool -> true/false, safe
+    strings unquoted, anything risky as a JSON-encoded double-quoted string (valid YAML)."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    s = str(value)
+    if _YAML_SAFE.match(s) and ": " not in s and not s.endswith(" "):
+        return s
+    return json.dumps(s)
+
+
+def _prediction_dict(run: RunReport) -> dict:
+    """The at-a-glance prediction: the verdict label and the binary is_scam, plus identity."""
+    return {
+        "timestamp": run.started_at,
+        "target": run.target_domain,
+        "url": run.url,
+        "verdict": run.verdict,
+        "is_scam": run.is_scam,
+        "scam_type": run.scam_type,
+    }
+
+
+def render_prediction_yaml(run: RunReport) -> str:
+    """A tiny, human-scannable YAML of just the prediction result."""
+    d = _prediction_dict(run)
+    order = ["target", "url", "timestamp", "verdict", "is_scam", "scam_type"]
+    return "".join(f"{k}: {_yaml_scalar(d[k])}\n" for k in order)
+
+
+def append_prediction_ledger(run: RunReport, logs_root: Path) -> Path:
+    """Append this run's prediction as one JSON line to logs_root/predictions.jsonl so all
+    runs' results can be scanned at once. Returns the ledger path."""
+    logs_root.mkdir(parents=True, exist_ok=True)
+    path = logs_root / "predictions.jsonl"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(_prediction_dict(run)) + "\n")
+    return path
+
+
 def write_run_report(run: RunReport, logs_root: Path, verbose: bool = False) -> Path:
-    """Create logs_root/<started_at-compact>_<domain>/ and write report.json + report.log.
-    Returns the run folder. (debug.log is written separately via run_debug_log.)"""
+    """Create logs_root/<started_at-compact>_<domain>/ and write report.json + report.log +
+    prediction.yml, and append the prediction to logs_root/predictions.jsonl. Returns the
+    run folder. (debug.log is written separately via run_debug_log.)"""
     stamp = run.started_at.replace(":", "-")
     folder = logs_root / f"{stamp}_{run.target_domain}"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "report.json").write_text(render_json(run))
     (folder / "report.log").write_text(render_log(run, verbose=verbose))
+    (folder / "prediction.yml").write_text(render_prediction_yaml(run))
+    append_prediction_ledger(run, logs_root)
     return folder
 
 
