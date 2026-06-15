@@ -90,6 +90,26 @@ def test_prompt_waits_for_lazy_lists_to_settle():
     assert "stops growing" in low
 
 
+def test_prompt_done_criterion_is_relatedness_based():
+    # "Finished" is judged by whether the page continues/results from the flow, not by
+    # domain: a different website that is the continuation still counts; an unrelated
+    # detour does not. (A blunt cross-domain=failure rule would make the agent flee
+    # legitimate payment-processor handoffs.)
+    low = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "continuation or result" in low
+    assert "even if it is on a different website" in low
+    assert "unrelated to your task" in low
+
+
+def test_prompt_plans_and_tracks_progress():
+    # Reinforces browser-use's built-in planning: lay the flow out as steps, track which
+    # step you're on, and don't declare done while steps remain.
+    low = _build_task_prompt("http://example.com", _persona()).lower()
+    assert "lay the flow out" in low
+    assert "which step you are on" in low
+    assert "have not finished while there are still steps" in low
+
+
 def test_prompt_distinguishes_targeting_miss_from_refusal():
     # A click that didn't land must be retried on the same intended button, not
     # treated as the site refusing the action (so flow-critical buttons aren't abandoned).
