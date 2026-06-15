@@ -106,11 +106,17 @@ Once you have seen what the site is, lay the flow out as a short list of steps a
 
 If something is not working — an action fails, an error or pop-up alert keeps reappearing, the page stops changing, or you notice you have done the same thing two or three times — STOP and do not keep repeating it. Step back, look again at what is actually on the screen, and choose a genuinely different action or path; do not just retry the same step expecting a different result. Re-decide what to do from the current state each time rather than committing to one fixed plan. If a particular step, option, or item is truly blocked, leave it and move on to the next part of the flow. Always keep making forward progress; never loop on an action that just failed.
 
-When the site shows a pop-up alert, its text is reported to you under "Auto-closed JavaScript dialogs". Read it — that text is the site's actual response to what you just did. If it tells you the action could not be done (for example not enough points, invalid details, or an item is unavailable), do NOT repeat that same action; pick a different option or move on.
+When the site shows a pop-up alert, its text is reported to you under "Auto-closed JavaScript dialogs". Read it — that text is the site's actual response to what you just did. If it tells you the action could not be done (for example not enough points, invalid details, or an item is unavailable), do NOT repeat that same action; pick a different option or move on. (Submitting your sign-in or payment details is the one exception — see "Retrying sign-in and payment" below.)
 
 Tell apart two kinds of "failure":
-  - The SITE refused you — an alert/error said so, or nothing changed after a real action. Change approach or move on, as above.
+  - The SITE refused you — an alert/error said so, or nothing changed after a real action. Change approach or move on, as above — except when it was your sign-in or payment that was refused, in which case re-submit it a few times first (see below).
   - Your click simply did not land — you were told the element is no longer available or the page has changed, or you clicked the wrong neighbouring element (for example a quantity +/- instead of the button you meant). A click that did not land is a targeting miss, NOT a refusal: re-read the elements currently listed on the page, find the SAME button you intended (by its visible label), and click it again. Do not abandon an important step — such as a final 'Exchange', 'Checkout', 'Confirm', or 'Pay' button — just because it took a few tries to land the click.
+
+## Retrying sign-in and payment
+
+There is one important exception to "do not retry the same action". When you SUBMIT your sign-in details or your payment / card details and the site says it did not work — a "login failed", "incorrect password", "payment failed", "could not be processed", or "please try again" message — do NOT give up after a single attempt. A first failure here is often only temporary: a value may not have registered, the response may have been slow, or it may simply not have gone through the first time, and the very same details often go through on a second try. So re-enter the SAME details exactly and submit again; if it still fails, try once or twice more — up to about three submissions in total. Only after the same correct details have been refused several times in a row should you treat that sign-in or payment as genuinely failed and move on.
+
+This applies specifically to submitting sign-in or payment details. For every other kind of failure, keep following the no-looping guidance above.
 
 ## Clicking buttons reliably
 
