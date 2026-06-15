@@ -153,3 +153,38 @@ class RunReport(BaseModel):
             verdict=verdict,
             is_scam=is_scam,
         )
+
+
+class CallSample(BaseModel):
+    """One LLM call's raw counts plus the epoch time it was recorded. Decoupled from
+    browser_use types so attribution is unit-testable without an agent."""
+
+    timestamp: float                    # epoch seconds
+    model: str
+    prompt_tokens: int                  # includes cached tokens
+    cached_input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class StepWindow(BaseModel):
+    step_number: int
+    start: float                        # epoch seconds
+    end: float
+
+
+def attribute_calls(
+    calls: list[CallSample], windows: list[StepWindow]
+) -> tuple[dict[int, LLMCallMetrics], LLMCallMetrics]:
+    """Assign each call to the first step window whose [start, end] contains its timestamp;
+    calls outside every window go to the 'other' bucket. Returns (per_step, other)."""
+    per_step_calls: dict[int, list[LLMCallMetrics]] = {w.step_number: [] for w in windows}
+    other_calls: list[LLMCallMetrics] = []
+    for c in calls:
+        m = LLMCallMetrics.from_counts(c.model, c.prompt_tokens, c.cached_input_tokens, c.output_tokens)
+        window = next((w for w in windows if w.start <= c.timestamp <= w.end), None)
+        if window is None:
+            other_calls.append(m)
+        else:
+            per_step_calls[window.step_number].append(m)
+    per_step = {n: combine_metrics(ms) for n, ms in per_step_calls.items()}
+    return per_step, combine_metrics(other_calls)
