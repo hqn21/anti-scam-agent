@@ -171,3 +171,28 @@ def test_render_log_marks_unknown_pricing():
     run = RunReport.build("e.com", "http://e.com", "2026-06-15T18:30:12+08:00", 1.0, [stage], "uncertain", False)
     text = render_log(run, verbose=False)
     assert "pricing unknown" in text
+
+
+import logging
+from anti_scam_agent.reporting import write_run_report, run_debug_log
+
+
+def test_write_run_report_creates_folder_and_files(tmp_path):
+    run = _sample_run()
+    folder = write_run_report(run, logs_root=tmp_path, verbose=False)
+    assert folder.parent == tmp_path
+    assert (folder / "report.json").exists()
+    assert (folder / "report.log").exists()
+    assert "example.com" in folder.name
+    log_text = (folder / "report.log").read_text()
+    assert "Anti-Scam Run" in log_text
+
+
+def test_run_debug_log_captures_root_logging_then_detaches(tmp_path):
+    debug_file = tmp_path / "debug.log"
+    root = logging.getLogger()
+    before = len(root.handlers)
+    with run_debug_log(debug_file):
+        logging.getLogger("anti_scam_agent.something").warning("captured line")
+    assert "captured line" in debug_file.read_text()
+    assert len(root.handlers) == before
