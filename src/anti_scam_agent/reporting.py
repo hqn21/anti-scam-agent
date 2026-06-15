@@ -6,6 +6,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+
 
 class ModelPrice(BaseModel):
     """USD per 1,000,000 tokens."""
@@ -253,3 +258,36 @@ def render_log(run: RunReport, verbose: bool = False) -> str:
     lines.append(f"Wall time: {run.duration_s:.1f}s       ({per_stage})")
     lines.append("===============================================")
     return "\n".join(lines) + "\n"
+
+
+def write_run_report(run: RunReport, logs_root: Path, verbose: bool = False) -> Path:
+    """Create logs_root/<started_at-compact>_<domain>/ and write report.json + report.log.
+    Returns the run folder. (debug.log is written separately via run_debug_log.)"""
+    stamp = run.started_at.replace(":", "-")
+    folder = logs_root / f"{stamp}_{run.target_domain}"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "report.json").write_text(render_json(run))
+    (folder / "report.log").write_text(render_log(run, verbose=verbose))
+    return folder
+
+
+@contextmanager
+def run_debug_log(debug_file: Path) -> Iterator[None]:
+    """Tee all Python logging emitted during the run into debug_file, then detach.
+    Captures browser_use internals and our own logger.warning calls without touching
+    individual call sites."""
+    debug_file.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(debug_file, encoding="utf-8")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root = logging.getLogger()
+    previous_level = root.level
+    root.addHandler(handler)
+    if root.level > logging.INFO or root.level == logging.NOTSET:
+        root.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        root.removeHandler(handler)
+        handler.close()
+        root.setLevel(previous_level)
