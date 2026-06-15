@@ -1,4 +1,3 @@
-from anti_scam_agent.tools.handler import get_domain_info
-from anti_scam_agent.tools.handler import _get_domain_info
+from anti_scam_agent.tools.handler import DomainInfo, _domain_info_from_whois, _get_domain_info
 
-__all__ = ['get_domain_info', '_get_domain_info']
+__all__ = ["DomainInfo", "_domain_info_from_whois", "_get_domain_info"]
