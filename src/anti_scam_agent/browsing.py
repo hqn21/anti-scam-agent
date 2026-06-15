@@ -238,11 +238,15 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
     task = _build_task_prompt(url, persona)
 
     browser = Browser(
-        # Longer settle waits so lazy-loaded / infinite-scroll content finishes rendering
-        # before the DOM is snapshotted — fewer stale "element index not available" misses.
-        minimum_wait_page_load_time=3.0,
-        wait_for_network_idle_page_load_time=5.0,
-        wait_between_actions=1.0,
+        # Moderate settle margin (defaults are 0.25 / 0.5 / 0.1). We keep ~2-4x the default
+        # so late-rendering pages have time to paint, but no more: the lazy-load / late-render
+        # case that originally motivated much longer waits is now handled directly by the
+        # click_by_visible_text tool and scroll-to-settle, not by stalling on every load.
+        # wait_for_network_idle especially: many sites' trackers never go idle, so a large
+        # value just burns the full timeout on every navigation.
+        minimum_wait_page_load_time=1.0,
+        wait_for_network_idle_page_load_time=2.0,
+        wait_between_actions=0.5,
         headless=False,
         disable_security=True,
         cross_origin_iframes=True,
