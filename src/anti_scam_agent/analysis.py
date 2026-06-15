@@ -1,14 +1,13 @@
-import logging
+import time
 
 from agents import Agent, Runner
 from dotenv import load_dotenv
 
 from anti_scam_agent.models import BrowsingResult, ScamAssessment
+from anti_scam_agent.reporting import LLMCallMetrics, StageReport, StepRecord
 from anti_scam_agent.signals import StaticSignals
 
 load_dotenv()
-
-logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """# Role
 
@@ -68,7 +67,7 @@ async def run_analysis_agent(
     browsing_result: BrowsingResult,
     domain: str,
     static_signals: StaticSignals | None = None,
-) -> ScamAssessment:
+) -> tuple[ScamAssessment, StageReport]:
     agent = Agent(
         name="AnalysisAgent",
         instructions=_SYSTEM_PROMPT,
@@ -87,11 +86,20 @@ async def run_analysis_agent(
         f"Browsing report (JSON):\n{browsing_result.model_dump_json(indent=2)}"
     )
 
+    start = time.monotonic()
     result = await Runner.run(agent, input=user_message)
+    duration_s = time.monotonic() - start
+
     u = result.context_wrapper.usage
-    logger.info(f"Requests     : {u.requests}")
-    logger.info(f"Input tokens : {u.input_tokens}")
-    logger.info(f"Cached tokens: {u.input_tokens_details.cached_tokens}")
-    logger.info(f"Output tokens: {u.output_tokens}")
-    logger.info(f"Total tokens : {u.total_tokens}")
-    return result.final_output_as(ScamAssessment)
+    cached = getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0
+    metrics = LLMCallMetrics.from_counts(
+        "gpt-4.1",
+        prompt_tokens=u.input_tokens,
+        cached_input_tokens=cached,
+        output_tokens=u.output_tokens,
+    )
+    step = StepRecord(step_number=1, duration_s=duration_s, action_types=["analyze"], metrics=metrics)
+    stage = StageReport.build(
+        name="analysis", model="gpt-4.1", duration_s=duration_s, steps=[step], other_metrics=LLMCallMetrics()
+    )
+    return result.final_output_as(ScamAssessment), stage
