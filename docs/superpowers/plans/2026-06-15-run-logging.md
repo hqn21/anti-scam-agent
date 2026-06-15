@@ -374,7 +374,8 @@ def test_attribute_calls_buckets_by_window_and_collects_leftovers():
     grand = combine_metrics(list(per_step.values()) + [other])
     each = combine_metrics([LLMCallMetrics.from_counts(c.model, c.prompt_tokens, c.cached_input_tokens, c.output_tokens) for c in calls])
     assert grand.total_tokens == each.total_tokens
-    assert grand.cost_usd == each.cost_usd
+    # float addition is non-associative; the groupings differ only in last-bit rounding.
+    assert grand.cost_usd == pytest.approx(each.cost_usd)  # requires `import pytest` at top
 
 
 def test_attribute_calls_no_windows_all_other():
