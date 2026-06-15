@@ -18,6 +18,7 @@ _faker = Faker("en_US")
 _CREDIT_CARD_PRODUCTS: dict[str, tuple[list[str], int, int]] = {
     "visa": (["4147", "4313", "4514", "4929"], 16, 3),
     "mastercard": (["5176", "5215", "5425", "5573"], 16, 3),
+    "jcb": (["3528", "3540", "3566", "3589"], 16, 3),
     "amex": (["34", "37"], 15, 4),
 }
 
