@@ -28,8 +28,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_MAX_STEPS = 100
-_TIMEOUT_SECONDS = 900  # 15 minutes
+_MAX_STEPS = 20
+_TIMEOUT_SECONDS = 480  # 15 minutes
 # One action per step: the DOM (and its click indices) is re-serialized before every
 # action, so a click can never fire against a stale index from before the page changed.
 # This is the robust guard against same-URL in-place DOM re-renders (SPA / client-rendered
