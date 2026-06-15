@@ -2,20 +2,20 @@ from pydantic import BaseModel, Field
 from typing import Annotated
 from enum import Enum
 
+class CreditCard(BaseModel):
+    number: str
+    expiry: str
+    cvv: str
+
 class FakePersona(BaseModel):
     name: str
     email: str
     password: str
     phone: str
     address: str
-    credit_card_number: str
-    credit_card_expiry: str
-    credit_card_cvv: str
-    # The same person's international-facing details, for foreign / English-only
-    # forms that won't accept Chinese characters or a local phone format.
-    name_international: str
-    phone_international: str
-    address_international: str
+    # Several cards so the browser can fall back to another one if a site rejects a card
+    # by type (e.g. "card not accepted" / "no debit cards") rather than declining it.
+    cards: list[CreditCard]
 
 class Outcome(str, Enum):
     not_attempted = "not_attempted"

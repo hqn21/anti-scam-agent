@@ -63,6 +63,10 @@ def _build_task_prompt(url: str, persona: FakePersona) -> str:
     terms that could reveal the true purpose of the visit.
     The agent must not suspect it is being used for anti-scam analysis.
     """
+    cards_block = "\n".join(
+        f"  - Card {i}: number {card.number}, expiry {card.expiry}, security code (CVV) {card.cvv}"
+        for i, card in enumerate(persona.cards, start=1)
+    )
     return f"""# Your visit to {url}
 
 You are visiting the website {url} as an interested first-time user who wants to go all the way through whatever the site offers.
@@ -75,14 +79,9 @@ Use these details to fill in any forms the site asks you to complete:
   - Password (for any account you need to create): {persona.password}
   - Phone number: {persona.phone}
   - Mailing address: {persona.address}
-  - Credit card number: {persona.credit_card_number}
-  - Credit card expiry: {persona.credit_card_expiry}
-  - Credit card security code (CVV): {persona.credit_card_cvv}
 
-If a form is in English or will not accept Chinese characters, give the same details in their international form instead:
-  - Full name (international): {persona.name_international}
-  - Phone number (international): {persona.phone_international}
-  - Mailing address (international): {persona.address_international}
+You have several payment cards, listed below. Use the first card by default. If the site refuses a card for a reason about the card itself being unsupported — it says it does not accept that kind of card, does not accept debit cards, or that card type is not supported — that is not a real decline: switch to the NEXT card on the list and try again. Only stop going through the cards when the site clearly declines a specific card as invalid or declined, or you have tried them all.
+{cards_block}
 
 ## Your goal
 
@@ -147,14 +146,15 @@ def _iter_strings(obj) -> "list[str]":
     return out
 
 
-def _card_was_entered(actions: list, card_number: str) -> bool:
-    """Whether the card number was typed into any recorded action (digits-only match)."""
-    target = re.sub(r"\D", "", card_number or "")
-    if len(target) < 12:
+def _card_was_entered(actions: list, card_numbers: list[str]) -> bool:
+    """Whether any of the card numbers was typed into a recorded action (digits-only match)."""
+    targets = [t for n in card_numbers if len(t := re.sub(r"\D", "", n or "")) >= 12]
+    if not targets:
         return False
     for action in actions:
         for s in _iter_strings(action):
-            if target in re.sub(r"\D", "", s):
+            digits = re.sub(r"\D", "", s)
+            if any(target in digits for target in targets):
                 return True
     return False
 
@@ -178,7 +178,7 @@ def _salvage_result_from_history(history, url: str, persona: FakePersona, note: 
     except Exception as e:  # noqa: BLE001
         logger.warning("could not read history urls on %s: %s", url, e)
 
-    card_submitted = _card_was_entered(actions, persona.credit_card_number)
+    card_submitted = _card_was_entered(actions, [card.number for card in persona.cards])
     events = [note]
     payment_outcome = Outcome.not_attempted
     if card_submitted:

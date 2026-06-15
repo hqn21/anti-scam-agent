@@ -9,22 +9,21 @@ from anti_scam_agent.browsing import (
     _external_links,
     _salvage_result_from_history,
 )
-from anti_scam_agent.models import FakePersona, Outcome
+from anti_scam_agent.models import CreditCard, FakePersona, Outcome
 
 
 def _persona() -> FakePersona:
     return FakePersona(
-        name="王怡君",
-        email="jane.doe11@example.com",
+        name="John Carter",
+        email="john.carter11@example.com",
         password="hunter2hunter2",
-        phone="0912-345678",
-        address="台北市中山區中山路一段1號",
-        credit_card_number="4111111111111111",
-        credit_card_expiry="08/30",
-        credit_card_cvv="123",
-        name_international="Yijun Wang",
-        phone_international="+886 912-345678",
-        address_international="1 Main St, Springfield, IL 62701",
+        phone="(415) 555-0132",
+        address="1 Main St, Springfield, IL 62701",
+        cards=[
+            CreditCard(number="4111111111111111", expiry="08/30", cvv="123"),
+            CreditCard(number="5555555555554444", expiry="04/29", cvv="321"),
+            CreditCard(number="371449635398431", expiry="11/28", cvv="1234"),
+        ],
     )
 
 
@@ -126,12 +125,16 @@ def test_prompt_recovers_from_stray_redirect():
     assert "unrelated" in prompt or "different" in prompt
 
 
-def test_prompt_offers_international_identity():
+def test_prompt_lists_multiple_payment_cards_with_fallback():
     prompt = _build_task_prompt("http://example.com", _persona())
-    # both the local and the international identity are offered to the agent
-    assert "王怡君" in prompt
-    assert "Yijun Wang" in prompt
-    assert "+886 912-345678" in prompt
+    low = prompt.lower()
+    # every card the persona carries is offered to the agent
+    assert "4111111111111111" in prompt
+    assert "5555555555554444" in prompt
+    assert "371449635398431" in prompt
+    # and it is told to fall back to the next card on a card-type refusal (not a decline)
+    assert "next card" in low
+    assert "debit" in low
 
 
 class _FakeHistory:
@@ -148,8 +151,9 @@ class _FakeHistory:
 
 def test_card_was_entered_matches_despite_formatting():
     actions = [{"input_text": {"index": 5, "text": "4111-1111 1111 1111"}}]
-    assert _card_was_entered(actions, "4111111111111111") is True
-    assert _card_was_entered([{"click": {"index": 2}}], "4111111111111111") is False
+    # Any of the persona's cards counts; formatting (spaces/dashes) is ignored.
+    assert _card_was_entered(actions, ["5555555555554444", "4111111111111111"]) is True
+    assert _card_was_entered([{"click": {"index": 2}}], ["4111111111111111"]) is False
 
 
 def test_salvage_zero_evidence_history_marks_incomplete_no_payment():
