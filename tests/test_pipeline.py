@@ -1,10 +1,16 @@
 import asyncio
+import contextlib
 
 import pytest
 
 import anti_scam_agent.pipeline as pipeline
 from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment, Verdict
+from anti_scam_agent.reporting import LLMCallMetrics, StageReport
 from anti_scam_agent.signals import StaticSignals
+
+
+def _stage(name: str) -> StageReport:
+    return StageReport.build(name=name, model=None, duration_s=0.0, steps=[], other_metrics=LLMCallMetrics())
 
 
 def _result(payment: Outcome) -> BrowsingResult:
@@ -36,17 +42,21 @@ def _patch(monkeypatch, payment_sequence):
         calls["browse_inbox"] = inbox
         payment = payment_sequence[calls["browse"]]
         calls["browse"] += 1
-        return _result(payment)
+        return _result(payment), _stage("browsing")
 
     async def fake_analyze(result, domain, static_signals):
         calls["static"] = static_signals
-        return _assessment()
+        return _assessment(), _stage("analysis")
 
     monkeypatch.setattr(pipeline, "run_browsing_agent", fake_browse)
     monkeypatch.setattr(pipeline, "run_analysis_agent", fake_analyze)
     monkeypatch.setattr(pipeline, "collect_static_signals", lambda url: StaticSignals(target_host="shop.test"))
     monkeypatch.setattr(pipeline, "make_client", lambda: object())
     monkeypatch.setattr(pipeline, "pick_inbox", lambda: "asalpha@agentmail.to")
+    # Keep these orchestration tests hermetic: don't write report files or attach a
+    # root-logger handler. Reporting itself is covered by tests/test_reporting.py.
+    monkeypatch.setattr(pipeline, "run_debug_log", lambda *a, **k: contextlib.nullcontext())
+    monkeypatch.setattr(pipeline, "write_run_report", lambda report, logs_root, verbose=False: logs_root / "stub")
     return calls
 
 
