@@ -84,6 +84,17 @@ def test_email_is_ascii_example_address():
     assert persona.email.endswith("@example.com"), persona.email
 
 
+def test_card_prefix_is_from_credit_bin_set():
+    # Every generated number must begin with one of the curated credit-product BIN
+    # prefixes (so it is classified as a credit card, not debit), never a random brand prefix.
+    from anti_scam_agent.persona import _CREDIT_CARD_PRODUCTS
+
+    allowed = tuple(p for prefixes, _, _ in _CREDIT_CARD_PRODUCTS.values() for p in prefixes)
+    for _ in range(40):
+        digits = re.sub(r"\D", "", generate_persona().credit_card_number)
+        assert digits.startswith(allowed), digits
+
+
 def test_card_type_mix_is_localized():
     # JCB (common in Taiwan) should appear; Discover (rare in TW) should not.
     prefixes = {re.sub(r"\D", "", generate_persona().credit_card_number)[:2] for _ in range(80)}
