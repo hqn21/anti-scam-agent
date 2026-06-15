@@ -263,42 +263,52 @@ def _browsing_stage_report(agent, duration_s: float, note: str | None = None) ->
     except Exception:  # noqa: BLE001
         calls = []
 
-    # Step windows from history metadata.
-    windows: list[StepWindow] = []
-    for h in history_items:
-        meta = getattr(h, "metadata", None)
-        if meta is not None:
-            windows.append(StepWindow(step_number=meta.step_number, start=meta.step_start_time, end=meta.step_end_time))
+    # Assemble step windows and per-step records. Wrapped whole: the contract is that this
+    # function never raises, even if an upstream browser_use schema change makes a field
+    # access fail mid-loop — telemetry must never sink the already-salvaged BrowsingResult.
+    try:
+        windows: list[StepWindow] = []
+        for h in history_items:
+            meta = getattr(h, "metadata", None)
+            if meta is not None:
+                windows.append(
+                    StepWindow(step_number=meta.step_number, start=meta.step_start_time, end=meta.step_end_time)
+                )
 
-    per_step, other = attribute_calls(calls, windows)
+        per_step, other = attribute_calls(calls, windows)
 
-    steps: list[StepRecord] = []
-    for h in history_items:
-        meta = getattr(h, "metadata", None)
-        if meta is None:
-            continue
-        out = h.model_output
-        action_types: list[str] = []
-        if out is not None:
-            for action in out.action:
-                dumped = action.model_dump(exclude_none=True, mode="json")
-                name = next(iter(dumped), None)
-                if name:
-                    action_types.append(name)
-        errors = [r.error for r in h.result if getattr(r, "error", None)]
-        steps.append(
-            StepRecord(
-                step_number=meta.step_number,
-                duration_s=meta.duration_seconds,
-                url=getattr(h.state, "url", None),
-                action_types=action_types,
-                thinking=getattr(out, "thinking", None) if out else None,
-                evaluation=getattr(out, "evaluation_previous_goal", None) if out else None,
-                memory=getattr(out, "memory", None) if out else None,
-                next_goal=getattr(out, "next_goal", None) if out else None,
-                result_errors=errors,
-                metrics=per_step.get(meta.step_number, combine_metrics([])),
+        steps: list[StepRecord] = []
+        for h in history_items:
+            meta = getattr(h, "metadata", None)
+            if meta is None:
+                continue
+            out = h.model_output
+            action_types: list[str] = []
+            if out is not None:
+                for action in out.action:
+                    dumped = action.model_dump(exclude_none=True, mode="json")
+                    name = next(iter(dumped), None)
+                    if name:
+                        action_types.append(name)
+            errors = [r.error for r in h.result if getattr(r, "error", None)]
+            steps.append(
+                StepRecord(
+                    step_number=meta.step_number,
+                    duration_s=meta.duration_seconds,
+                    url=getattr(h.state, "url", None),
+                    action_types=action_types,
+                    thinking=getattr(out, "thinking", None) if out else None,
+                    evaluation=getattr(out, "evaluation_previous_goal", None) if out else None,
+                    memory=getattr(out, "memory", None) if out else None,
+                    next_goal=getattr(out, "next_goal", None) if out else None,
+                    result_errors=errors,
+                    metrics=per_step.get(meta.step_number, combine_metrics([])),
+                )
             )
+    except Exception as e:  # noqa: BLE001 — telemetry must not break the pipeline
+        logger.warning("could not assemble browsing telemetry: %s", e)
+        return StageReport.build(
+            name="browsing", model=model, duration_s=duration_s, steps=[], other_metrics=combine_metrics([]), note=note
         )
 
     return StageReport.build(
