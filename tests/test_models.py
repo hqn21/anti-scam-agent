@@ -1,4 +1,4 @@
-from anti_scam_agent.models import BrowsingResult, Outcome
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment, Verdict
 
 def test_browsing_result_has_neutral_fields():
     fields = BrowsingResult.model_fields
@@ -50,3 +50,14 @@ def test_browsing_result_has_payment_explicitly_declined():
     assert fields["payment_explicitly_declined"].annotation is bool
     # default must be the safe/neutral False
     assert fields["payment_explicitly_declined"].default is False
+
+
+def test_scam_assessment_is_scam_mapping():
+    def mk(v: Verdict) -> ScamAssessment:
+        return ScamAssessment(verdict=v, scam_type=None, reasoning="r", risk_factors=[])
+
+    assert mk(Verdict.scam).is_scam is True
+    assert mk(Verdict.likely_scam).is_scam is True
+    assert mk(Verdict.uncertain).is_scam is False
+    assert mk(Verdict.likely_legitimate).is_scam is False
+    assert mk(Verdict.legitimate).is_scam is False

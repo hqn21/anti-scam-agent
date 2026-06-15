@@ -2,7 +2,7 @@ import asyncio
 import inspect
 
 from anti_scam_agent.analysis import run_analysis_agent
-from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment
+from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment, Verdict
 
 OBVIOUS_SCAM = BrowsingResult(
     website_summary="Site claims the user has won a lottery and asks for immediate payment of a small processing fee to release a large prize.",
@@ -47,7 +47,8 @@ def test_analysis_agent_returns_assessment_for_scam_fixture():
     print("\n[SCAM FIXTURE]")
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)
-    assert 0.0 <= assessment.confidence <= 1.0
+    assert isinstance(assessment.verdict, Verdict)
+    assert isinstance(assessment.is_scam, bool)
 
 
 def test_analysis_agent_returns_assessment_for_legit_fixture():
@@ -55,20 +56,26 @@ def test_analysis_agent_returns_assessment_for_legit_fixture():
     print("\n[LEGIT FIXTURE]")
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)
-    assert 0.0 <= assessment.confidence <= 1.0
+    assert isinstance(assessment.verdict, Verdict)
+    assert isinstance(assessment.is_scam, bool)
 
 
 def test_system_prompt_encodes_explicit_decline_rule():
     from anti_scam_agent.analysis import _SYSTEM_PROMPT
 
     p = _SYSTEM_PROMPT.lower()
+    # the payment rule's core reasoning is present
     assert "payment_explicitly_declined" in p
-    # the rule's core reasoning is actually present, not just the field name
     assert "no real processor" in p
     # a hang/stall after submitting the card is treated as a signal, not abstained away
     assert "hung" in p or "stall" in p
     assert "credit_card_submitted is true" in p
-    # the old framings are gone
+    # the five ordinal verdict levels are spelled out
+    for level in ("scam", "likely_scam", "uncertain", "likely_legitimate", "legitimate"):
+        assert level in p
+    # the dropped fields are gone, and old framings stay gone
+    assert "confidence" not in p
+    assert "is_scam" not in p
     assert "luhn_invalid" not in p
     assert "card tier" not in p
     assert "exoneration" not in p
