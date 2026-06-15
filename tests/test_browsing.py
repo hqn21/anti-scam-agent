@@ -1,9 +1,10 @@
 import asyncio
+import json
 from types import SimpleNamespace
 
 from anti_scam_agent.browsing import (
-    _build_email_tools,
     _build_task_prompt,
+    _build_tools,
     _card_was_entered,
     _external_links,
     _salvage_result_from_history,
@@ -74,12 +75,13 @@ def test_prompt_handles_stale_element_indices():
 
 
 def test_prompt_offers_text_based_click_fallback():
-    # When index-clicking a visible button keeps missing, fall back to find_text /
-    # evaluate (JS click by visible text) which bypass the unreliable numbering.
+    # When index-clicking a visible button keeps missing, fall back to the
+    # click-by-visible-text tool (and find_text) which bypass the unreliable numbering.
     prompt = _build_task_prompt("http://example.com", _persona())
     assert "find_text" in prompt
-    assert "evaluate" in prompt
-    assert ".click()" in prompt
+    assert "visible text" in prompt
+    # the label is an example, not hardcoded into a single button name
+    assert "Checkout" in prompt and "Pay" in prompt
 
 
 def test_prompt_waits_for_lazy_lists_to_settle():
@@ -201,7 +203,7 @@ def _fake_client(code_text):
 
 
 def test_email_tool_registers_without_leaking_client_or_inbox():
-    tools = _build_email_tools(_fake_client("code 123456"), "in@x.to")
+    tools = _build_tools(_fake_client("code 123456"), "in@x.to")
     # tools.registry.registry.actions is browser-use internal API; update if its shape changes.
     action = tools.registry.registry.actions["read_email_inbox"]
     # The LLM-facing schema must expose NO client/inbox params (blind invariant).
@@ -213,10 +215,35 @@ def test_email_tool_registers_without_leaking_client_or_inbox():
 
 
 def test_email_tool_reads_inbox_contents():
-    tools = _build_email_tools(_fake_client("Your code is 123456"), "in@x.to")
+    tools = _build_tools(_fake_client("Your code is 123456"), "in@x.to")
     action = tools.registry.registry.actions["read_email_inbox"]
     out = asyncio.run(action.function(params=action.param_model()))
     assert "123456" in str(out)
+
+
+def test_click_by_text_tool_takes_a_label_and_stays_neutral():
+    tools = _build_tools(_fake_client("code 123456"), "in@x.to")
+    action = tools.registry.registry.actions["click_by_visible_text"]
+    # The label is the one LLM-facing param; browser_session is injected, not exposed.
+    fields = action.param_model.model_fields
+    assert "text" in fields
+    assert "browser_session" not in fields
+    desc = action.description.lower()
+    for word in ("scam", "phishing", "suspicious", "fake", "fabricated", "fraud", "agentmail", "luhn"):
+        assert word not in desc
+
+
+def test_click_by_text_js_embeds_any_label_safely():
+    # The label is interpolated via json.dumps (not hardcoded), so any text — including
+    # quotes — is safely quoted into the JS, and shadow roots are walked.
+    from anti_scam_agent.browsing import _CLICK_BY_TEXT_JS
+
+    assert "__LABEL__" in _CLICK_BY_TEXT_JS  # the only placeholder
+    assert "shadowRoot" in _CLICK_BY_TEXT_JS
+    label = "O'Brien \"Pay\""
+    code = _CLICK_BY_TEXT_JS.replace("__LABEL__", json.dumps(label))
+    assert "__LABEL__" not in code
+    assert f"const label = {json.dumps(label)};" in code
 
 
 def test_prompt_instructs_dismissing_blockers():
