@@ -1,0 +1,348 @@
+"""Data-derived run report. No LLM is called here; this module only assembles and
+formats numbers and strings produced elsewhere (agent history, token-usage records,
+the static-signal stage timing, and the final assessment)."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+import json
+import logging
+import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+
+
+class ModelPrice(BaseModel):
+    """USD per 1,000,000 tokens."""
+
+    input: float
+    cached_input: float
+    output: float
+
+
+# Maintained by hand. Add a line per model you run. gpt-4.1 / gpt-4.1-mini current pricing.
+_PRICING: dict[str, ModelPrice] = {
+    "gpt-4.1": ModelPrice(input=2.00, cached_input=0.50, output=8.00),
+    "gpt-4.1-mini": ModelPrice(input=0.40, cached_input=0.10, output=1.60),
+}
+
+
+def cost_usd(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int) -> float | None:
+    """USD cost for a call. input_tokens here is the NON-cached prompt tokens. Unknown
+    model -> None (never guess a price)."""
+    price = _PRICING.get(model)
+    if price is None:
+        return None
+    return (
+        input_tokens * price.input
+        + cached_input_tokens * price.cached_input
+        + output_tokens * price.output
+    ) / 1_000_000
+
+
+class LLMCallMetrics(BaseModel):
+    input_tokens: int = 0           # non-cached prompt tokens
+    cached_input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float | None = 0.0
+
+    @classmethod
+    def from_counts(
+        cls, model: str, prompt_tokens: int, cached_input_tokens: int, output_tokens: int
+    ) -> "LLMCallMetrics":
+        """prompt_tokens follows the browser_use convention: it INCLUDES cached tokens."""
+        cached = cached_input_tokens or 0
+        non_cached_input = max(prompt_tokens - cached, 0)
+        return cls(
+            input_tokens=non_cached_input,
+            cached_input_tokens=cached,
+            output_tokens=output_tokens,
+            total_tokens=non_cached_input + cached + output_tokens,
+            cost_usd=cost_usd(model, non_cached_input, cached, output_tokens),
+        )
+
+
+def combine_metrics(parts: list[LLMCallMetrics]) -> LLMCallMetrics:
+    """Sum metrics. Tokens always sum. Cost sums only when every part has a known cost;
+    if any part's cost is None (unknown model), the combined cost is None — honest rather
+    than silently under-counting."""
+    costs = [p.cost_usd for p in parts]
+    combined_cost: float | None
+    if any(c is None for c in costs):
+        combined_cost = None
+    else:
+        combined_cost = sum(c or 0.0 for c in costs)
+    return LLMCallMetrics(
+        input_tokens=sum(p.input_tokens for p in parts),
+        cached_input_tokens=sum(p.cached_input_tokens for p in parts),
+        output_tokens=sum(p.output_tokens for p in parts),
+        total_tokens=sum(p.total_tokens for p in parts),
+        cost_usd=combined_cost,
+    )
+
+
+class StepRecord(BaseModel):
+    step_number: int
+    duration_s: float
+    url: str | None = None
+    action_types: list[str] = []
+    thinking: str | None = None         # transcribed from agent output, not regenerated
+    evaluation: str | None = None
+    memory: str | None = None
+    next_goal: str | None = None
+    result_errors: list[str] = []
+    metrics: LLMCallMetrics = LLMCallMetrics()
+
+
+class StageReport(BaseModel):
+    name: str                           # "browsing" | "signals" | "analysis"
+    model: str | None = None
+    duration_s: float
+    steps: list[StepRecord] = []
+    other_metrics: LLMCallMetrics = LLMCallMetrics()   # LLM calls not tied to a step
+    totals: LLMCallMetrics = LLMCallMetrics()
+    note: str | None = None             # "timed out after Ns", "salvaged: ...", etc.
+
+    @classmethod
+    def build(
+        cls,
+        name: str,
+        model: str | None,
+        duration_s: float,
+        steps: list[StepRecord],
+        other_metrics: LLMCallMetrics,
+        note: str | None = None,
+    ) -> "StageReport":
+        totals = combine_metrics([s.metrics for s in steps] + [other_metrics])
+        return cls(
+            name=name,
+            model=model,
+            duration_s=duration_s,
+            steps=steps,
+            other_metrics=other_metrics,
+            totals=totals,
+            note=note,
+        )
+
+
+class RunReport(BaseModel):
+    target_domain: str
+    url: str
+    started_at: str                     # ISO 8601 local time
+    duration_s: float
+    stages: list[StageReport] = []
+    grand_total: LLMCallMetrics = LLMCallMetrics()
+    verdict: str | None = None
+    is_scam: bool | None = None
+    scam_type: str | None = None
+
+    @classmethod
+    def build(
+        cls,
+        target_domain: str,
+        url: str,
+        started_at: str,
+        duration_s: float,
+        stages: list[StageReport],
+        verdict: str | None,
+        is_scam: bool | None,
+        scam_type: str | None = None,
+    ) -> "RunReport":
+        grand_total = combine_metrics([s.totals for s in stages])
+        return cls(
+            target_domain=target_domain,
+            url=url,
+            started_at=started_at,
+            duration_s=duration_s,
+            stages=stages,
+            grand_total=grand_total,
+            verdict=verdict,
+            is_scam=is_scam,
+            scam_type=scam_type,
+        )
+
+
+class CallSample(BaseModel):
+    """One LLM call's raw counts plus the epoch time it was recorded. Decoupled from
+    browser_use types so attribution is unit-testable without an agent."""
+
+    timestamp: float                    # epoch seconds
+    model: str
+    prompt_tokens: int                  # includes cached tokens
+    cached_input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class StepWindow(BaseModel):
+    step_number: int
+    start: float                        # epoch seconds
+    end: float
+
+
+def attribute_calls(
+    calls: list[CallSample], windows: list[StepWindow]
+) -> tuple[dict[int, LLMCallMetrics], LLMCallMetrics]:
+    """Assign each call to the first step window whose [start, end] contains its timestamp;
+    calls outside every window go to the 'other' bucket. Returns (per_step, other)."""
+    per_step_calls: dict[int, list[LLMCallMetrics]] = {w.step_number: [] for w in windows}
+    other_calls: list[LLMCallMetrics] = []
+    for c in calls:
+        m = LLMCallMetrics.from_counts(c.model, c.prompt_tokens, c.cached_input_tokens, c.output_tokens)
+        window = next((w for w in windows if w.start <= c.timestamp <= w.end), None)
+        if window is None:
+            other_calls.append(m)
+        else:
+            per_step_calls[window.step_number].append(m)
+    per_step = {n: combine_metrics(ms) for n, ms in per_step_calls.items()}
+    return per_step, combine_metrics(other_calls)
+
+
+def render_json(run: RunReport) -> str:
+    return run.model_dump_json(indent=2)
+
+
+def _fmt_cost(cost: float | None) -> str:
+    return "(pricing unknown)" if cost is None else f"${cost:.4f}"
+
+
+def _fmt_metrics(m: LLMCallMetrics) -> str:
+    return (
+        f"{_fmt_cost(m.cost_usd)}   {m.total_tokens:,} tok "
+        f"(in {m.input_tokens:,} / cached {m.cached_input_tokens:,} / out {m.output_tokens:,})"
+    )
+
+
+def render_log(run: RunReport, verbose: bool = False) -> str:
+    lines: list[str] = []
+    lines.append("================ Anti-Scam Run ================")
+    lines.append(f"Target   : {run.target_domain}  ({run.url})")
+    lines.append(f"Started  : {run.started_at}")
+    lines.append(f"Duration : {run.duration_s:.1f}s")
+    lines.append(f"Cost     : {_fmt_metrics(run.grand_total)}")
+    lines.append(f"Verdict  : {run.verdict}   (is_scam={run.is_scam})")
+    lines.append("")
+
+    for stage in run.stages:
+        if stage.model is None and not stage.steps:
+            lines.append(f"-- Stage: {stage.name:<10} {stage.duration_s:.1f}s   (no LLM)")
+        else:
+            lines.append(
+                f"-- Stage: {stage.name:<10} {stage.duration_s:.1f}s   "
+                f"{_fmt_cost(stage.totals.cost_usd)}   {stage.totals.total_tokens:,} tok   model={stage.model}"
+            )
+        if stage.note:
+            lines.append(f"   note: {stage.note}")
+        for step in stage.steps:
+            actions = ",".join(step.action_types) or "-"
+            lines.append(
+                f"   step {step.step_number:02d}  {step.duration_s:.1f}s  {actions:<24} "
+                f"{step.metrics.total_tokens:,} tok  {_fmt_cost(step.metrics.cost_usd)}"
+            )
+            if step.evaluation:
+                lines.append(f"     eval : {step.evaluation}")
+            if step.next_goal:
+                lines.append(f"     goal : {step.next_goal}")
+            for err in step.result_errors:
+                lines.append(f"     ! result error: {err}")
+            if verbose and step.thinking:
+                for tline in step.thinking.splitlines():
+                    lines.append(f"     | {tline}")
+        if stage.other_metrics.total_tokens:
+            lines.append(
+                f"   (other LLM calls not tied to a step: {stage.other_metrics.total_tokens:,} tok, "
+                f"{_fmt_cost(stage.other_metrics.cost_usd)})"
+            )
+        lines.append("")
+
+    per_stage = " / ".join(f"{s.name} {s.duration_s:.1f}" for s in run.stages)
+    lines.append("================ Totals ================")
+    lines.append(f"LLM cost : {_fmt_cost(run.grand_total.cost_usd)}      LLM tokens: {run.grand_total.total_tokens:,}")
+    lines.append(f"Wall time: {run.duration_s:.1f}s       ({per_stage})")
+    lines.append("===============================================")
+    return "\n".join(lines) + "\n"
+
+
+# A scalar is safe to emit unquoted in YAML when it starts alphanumeric and uses only a
+# small set of punctuation. URLs and ISO timestamps qualify (their ':' is never ': ').
+_YAML_SAFE = re.compile(r"^[A-Za-z0-9][\w .,@:/+-]*$")
+
+
+def _yaml_scalar(value: object) -> str:
+    """Render a scalar as a valid YAML value. None -> null, bool -> true/false, safe
+    strings unquoted, anything risky as a JSON-encoded double-quoted string (valid YAML)."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    s = str(value)
+    if _YAML_SAFE.match(s) and ": " not in s and not s.endswith(" "):
+        return s
+    return json.dumps(s)
+
+
+def _prediction_dict(run: RunReport) -> dict:
+    """The at-a-glance prediction: the verdict label and the binary is_scam, plus identity."""
+    return {
+        "timestamp": run.started_at,
+        "target": run.target_domain,
+        "url": run.url,
+        "verdict": run.verdict,
+        "is_scam": run.is_scam,
+        "scam_type": run.scam_type,
+    }
+
+
+def render_prediction_yaml(run: RunReport) -> str:
+    """A tiny, human-scannable YAML of just the prediction result."""
+    d = _prediction_dict(run)
+    order = ["target", "url", "timestamp", "verdict", "is_scam", "scam_type"]
+    return "".join(f"{k}: {_yaml_scalar(d[k])}\n" for k in order)
+
+
+def append_prediction_ledger(run: RunReport, logs_root: Path) -> Path:
+    """Append this run's prediction as one JSON line to logs_root/predictions.jsonl so all
+    runs' results can be scanned at once. Returns the ledger path."""
+    logs_root.mkdir(parents=True, exist_ok=True)
+    path = logs_root / "predictions.jsonl"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(_prediction_dict(run)) + "\n")
+    return path
+
+
+def write_run_report(run: RunReport, logs_root: Path, verbose: bool = False) -> Path:
+    """Create logs_root/<started_at-compact>_<domain>/ and write report.json + report.log +
+    prediction.yml, and append the prediction to logs_root/predictions.jsonl. Returns the
+    run folder. (debug.log is written separately via run_debug_log.)"""
+    stamp = run.started_at.replace(":", "-")
+    folder = logs_root / f"{stamp}_{run.target_domain}"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "report.json").write_text(render_json(run))
+    (folder / "report.log").write_text(render_log(run, verbose=verbose))
+    (folder / "prediction.yml").write_text(render_prediction_yaml(run))
+    append_prediction_ledger(run, logs_root)
+    return folder
+
+
+@contextmanager
+def run_debug_log(debug_file: Path) -> Iterator[None]:
+    """Tee all Python logging emitted during the run into debug_file, then detach.
+    Captures browser_use internals and our own logger.warning calls without touching
+    individual call sites."""
+    debug_file.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(debug_file, encoding="utf-8")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root = logging.getLogger()
+    previous_level = root.level
+    root.addHandler(handler)
+    if root.level > logging.INFO or root.level == logging.NOTSET:
+        root.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        root.removeHandler(handler)
+        handler.close()
+        root.setLevel(previous_level)

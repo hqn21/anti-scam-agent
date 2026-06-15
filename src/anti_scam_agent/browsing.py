@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -11,6 +12,14 @@ from dotenv import load_dotenv
 
 from anti_scam_agent.email_evidence import read_inbox_text
 from anti_scam_agent.models import BrowsingResult, FakePersona, Outcome
+from anti_scam_agent.reporting import (
+    CallSample,
+    StageReport,
+    StepRecord,
+    StepWindow,
+    attribute_calls,
+    combine_metrics,
+)
 
 if TYPE_CHECKING:
     from agentmail import AgentMail
@@ -226,6 +235,87 @@ def _external_links(urls: list[str | None], target_url: str) -> list[str]:
     return links
 
 
+def _browsing_stage_report(agent, duration_s: float, note: str | None = None) -> StageReport:
+    """Build the browsing StageReport from already-produced data: agent.history (per-step
+    timing, actions, transcribed thinking/eval/goal, result errors) and
+    token_cost_service.usage_history (per-call tokens, attributed to steps by timestamp).
+    Never raises — telemetry must not break the pipeline."""
+    model = getattr(getattr(agent, "llm", None), "model", None)
+    try:
+        history_items = list(agent.history.history)
+    except Exception:  # noqa: BLE001
+        history_items = []
+
+    # Per-call samples from the token service.
+    calls: list[CallSample] = []
+    try:
+        for entry in agent.token_cost_service.usage_history:
+            u = entry.usage
+            calls.append(
+                CallSample(
+                    timestamp=entry.timestamp.timestamp(),
+                    model=entry.model,
+                    prompt_tokens=u.prompt_tokens,
+                    cached_input_tokens=u.prompt_cached_tokens or 0,
+                    output_tokens=u.completion_tokens,
+                )
+            )
+    except Exception:  # noqa: BLE001
+        calls = []
+
+    # Assemble step windows and per-step records. Wrapped whole: the contract is that this
+    # function never raises, even if an upstream browser_use schema change makes a field
+    # access fail mid-loop — telemetry must never sink the already-salvaged BrowsingResult.
+    try:
+        windows: list[StepWindow] = []
+        for h in history_items:
+            meta = getattr(h, "metadata", None)
+            if meta is not None:
+                windows.append(
+                    StepWindow(step_number=meta.step_number, start=meta.step_start_time, end=meta.step_end_time)
+                )
+
+        per_step, other = attribute_calls(calls, windows)
+
+        steps: list[StepRecord] = []
+        for h in history_items:
+            meta = getattr(h, "metadata", None)
+            if meta is None:
+                continue
+            out = h.model_output
+            action_types: list[str] = []
+            if out is not None:
+                for action in out.action:
+                    dumped = action.model_dump(exclude_none=True, mode="json")
+                    name = next(iter(dumped), None)
+                    if name:
+                        action_types.append(name)
+            errors = [r.error for r in h.result if getattr(r, "error", None)]
+            steps.append(
+                StepRecord(
+                    step_number=meta.step_number,
+                    duration_s=meta.duration_seconds,
+                    url=getattr(h.state, "url", None),
+                    action_types=action_types,
+                    thinking=getattr(out, "thinking", None) if out else None,
+                    evaluation=getattr(out, "evaluation_previous_goal", None) if out else None,
+                    memory=getattr(out, "memory", None) if out else None,
+                    next_goal=getattr(out, "next_goal", None) if out else None,
+                    result_errors=errors,
+                    metrics=per_step.get(meta.step_number, combine_metrics([])),
+                )
+            )
+    except Exception as e:  # noqa: BLE001 — telemetry must not break the pipeline
+        logger.warning("could not assemble browsing telemetry: %s", e)
+        return StageReport.build(
+            name="browsing", model=model, duration_s=duration_s, steps=[], other_metrics=combine_metrics([]), note=note
+        )
+
+    return StageReport.build(
+        name="browsing", model=model, duration_s=duration_s, steps=steps, other_metrics=other, note=note
+    )
+
+
 def _build_tools(client: "AgentMail", inbox: str) -> Tools:
     """The custom tools handed to the Browsing Agent. Descriptions stay neutral and any
     privileged values (client + inbox) are closure-captured so they never appear in the
@@ -259,7 +349,9 @@ def _build_tools(client: "AgentMail", inbox: str) -> Tools:
     return tools
 
 
-async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail", inbox: str) -> BrowsingResult:
+async def run_browsing_agent(
+    url: str, persona: FakePersona, client: "AgentMail", inbox: str
+) -> tuple[BrowsingResult, StageReport]:
     llm = ChatOpenAI(model="gpt-4.1")
     task = _build_task_prompt(url, persona)
 
@@ -292,23 +384,22 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
         max_actions_per_step=_MAX_ACTIONS_PER_STEP,
     )
 
+    start = time.monotonic()
+    note: str | None = None
     try:
-        history = await asyncio.wait_for(
-            agent.run(max_steps=_MAX_STEPS),
-            timeout=_TIMEOUT_SECONDS,
-        )
-        summary = await agent.token_cost_service.get_usage_summary()
-        logger.info(summary)
+        history = await asyncio.wait_for(agent.run(max_steps=_MAX_STEPS), timeout=_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         logger.warning("browsing agent timed out on %s", url)
-        return _salvage_result_from_history(
-            getattr(agent, "history", None), url, persona, f"browsing timed out after {_TIMEOUT_SECONDS}s"
-        )
+        note = f"timed out after {_TIMEOUT_SECONDS}s"
+        result = _salvage_result_from_history(getattr(agent, "history", None), url, persona, note)
+        return result, _browsing_stage_report(agent, time.monotonic() - start, note)
     except Exception as e:
         logger.warning("browsing agent raised on %s: %s", url, e)
-        return _salvage_result_from_history(
-            getattr(agent, "history", None), url, persona, f"browsing raised {type(e).__name__}: {e}"
-        )
+        note = f"salvaged: browsing raised {type(e).__name__}: {e}"
+        result = _salvage_result_from_history(getattr(agent, "history", None), url, persona, note)
+        return result, _browsing_stage_report(agent, time.monotonic() - start, note)
+
+    duration_s = time.monotonic() - start
 
     structured = history.structured_output
     result: BrowsingResult | None = None
@@ -319,14 +410,17 @@ async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail"
             result = BrowsingResult.model_validate(structured)
         except Exception as e:
             logger.warning("failed to parse structured dict on %s: %s", url, e)
-            return _salvage_result_from_history(history, url, persona, f"parsing structured output failed: {e}")
+            note = f"salvaged: parsing structured output failed: {e}"
+            result = _salvage_result_from_history(history, url, persona, note)
 
     if result is not None:
         try:
             result.outgoing_links = _external_links(history.urls(), url)
-        except Exception as e:  # never let history parsing break the result
+        except Exception as e:
             logger.warning("could not derive outgoing_links on %s: %s", url, e)
-        return result
+        return result, _browsing_stage_report(agent, duration_s, note)
 
     logger.warning("browsing agent returned no structured output on %s; salvaging from history", url)
-    return _salvage_result_from_history(history, url, persona, "browsing agent produced no structured output")
+    note = "salvaged: browsing agent produced no structured output"
+    result = _salvage_result_from_history(history, url, persona, note)
+    return result, _browsing_stage_report(agent, duration_s, note)

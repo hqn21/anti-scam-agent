@@ -38,26 +38,30 @@ def test_run_analysis_agent_accepts_static_signals():
     assert "static_signals" in params
 
 
-def _run(result: BrowsingResult, domain: str, static_signals=None) -> ScamAssessment:
+def _run(result: BrowsingResult, domain: str, static_signals=None):
     return asyncio.run(run_analysis_agent(result, domain, static_signals))
 
 
 def test_analysis_agent_returns_assessment_for_scam_fixture():
-    assessment = _run(OBVIOUS_SCAM, "example.com")
+    assessment, stage = _run(OBVIOUS_SCAM, "example.com")
     print("\n[SCAM FIXTURE]")
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)
     assert isinstance(assessment.verdict, Verdict)
     assert isinstance(assessment.is_scam, bool)
+    assert stage.name == "analysis"
+    assert stage.totals.total_tokens > 0
 
 
 def test_analysis_agent_returns_assessment_for_legit_fixture():
-    assessment = _run(OBVIOUS_LEGIT, "example.com")
+    assessment, stage = _run(OBVIOUS_LEGIT, "example.com")
     print("\n[LEGIT FIXTURE]")
     print(assessment.model_dump_json(indent=2))
     assert isinstance(assessment, ScamAssessment)
     assert isinstance(assessment.verdict, Verdict)
     assert isinstance(assessment.is_scam, bool)
+    assert stage.name == "analysis"
+    assert stage.totals.total_tokens > 0
 
 
 def test_system_prompt_encodes_explicit_decline_rule():
