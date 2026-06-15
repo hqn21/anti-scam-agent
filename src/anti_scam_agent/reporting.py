@@ -75,3 +75,81 @@ def combine_metrics(parts: list[LLMCallMetrics]) -> LLMCallMetrics:
         total_tokens=sum(p.total_tokens for p in parts),
         cost_usd=combined_cost,
     )
+
+
+class StepRecord(BaseModel):
+    step_number: int
+    duration_s: float
+    url: str | None = None
+    action_types: list[str] = []
+    thinking: str | None = None         # transcribed from agent output, not regenerated
+    evaluation: str | None = None
+    memory: str | None = None
+    next_goal: str | None = None
+    result_errors: list[str] = []
+    metrics: LLMCallMetrics = LLMCallMetrics()
+
+
+class StageReport(BaseModel):
+    name: str                           # "browsing" | "signals" | "analysis"
+    model: str | None = None
+    duration_s: float
+    steps: list[StepRecord] = []
+    other_metrics: LLMCallMetrics = LLMCallMetrics()   # LLM calls not tied to a step
+    totals: LLMCallMetrics = LLMCallMetrics()
+    note: str | None = None             # "timed out after Ns", "salvaged: ...", etc.
+
+    @classmethod
+    def build(
+        cls,
+        name: str,
+        model: str | None,
+        duration_s: float,
+        steps: list[StepRecord],
+        other_metrics: LLMCallMetrics,
+        note: str | None = None,
+    ) -> "StageReport":
+        totals = combine_metrics([s.metrics for s in steps] + [other_metrics])
+        return cls(
+            name=name,
+            model=model,
+            duration_s=duration_s,
+            steps=steps,
+            other_metrics=other_metrics,
+            totals=totals,
+            note=note,
+        )
+
+
+class RunReport(BaseModel):
+    target_domain: str
+    url: str
+    started_at: str                     # ISO 8601 local time
+    duration_s: float
+    stages: list[StageReport] = []
+    grand_total: LLMCallMetrics = LLMCallMetrics()
+    verdict: str | None = None
+    is_scam: bool | None = None
+
+    @classmethod
+    def build(
+        cls,
+        target_domain: str,
+        url: str,
+        started_at: str,
+        duration_s: float,
+        stages: list[StageReport],
+        verdict: str | None,
+        is_scam: bool | None,
+    ) -> "RunReport":
+        grand_total = combine_metrics([s.totals for s in stages])
+        return cls(
+            target_domain=target_domain,
+            url=url,
+            started_at=started_at,
+            duration_s=duration_s,
+            stages=stages,
+            grand_total=grand_total,
+            verdict=verdict,
+            is_scam=is_scam,
+        )
