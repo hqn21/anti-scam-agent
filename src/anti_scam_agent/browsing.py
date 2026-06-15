@@ -234,7 +234,11 @@ def _build_tools(client: "AgentMail", inbox: str) -> Tools:
 
 
 async def run_browsing_agent(url: str, persona: FakePersona, client: "AgentMail", inbox: str) -> BrowsingResult:
-    llm = ChatOpenAI(model="gpt-4.1")
+    # gpt-4.1-mini: the hardest mechanical step (locating/clicking an unindexable button)
+    # is now handled by the click_by_visible_text tool + max_actions_per_step=1, so the
+    # browsing model no longer has to carry click accuracy on its own. Watch flow-completion
+    # and card-submission rate on dynamic pages if revisiting this.
+    llm = ChatOpenAI(model="gpt-4.1-mini")
     task = _build_task_prompt(url, persona)
 
     browser = Browser(
