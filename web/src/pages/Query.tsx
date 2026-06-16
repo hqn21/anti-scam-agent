@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import VerdictBadge from "../components/VerdictBadge";
+import ReportBody from "../components/ReportBody";
 import { useAnalysisPolling } from "../hooks/useAnalysisPolling";
 
 export default function Query() {
@@ -24,7 +24,7 @@ export default function Query() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl mx-auto">
+    <div className="p-6 space-y-6 max-w-3xl mx-auto">
       {/* Page heading */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">查詢</h1>
@@ -69,27 +69,14 @@ export default function Query() {
         </div>
       )}
 
-      {/* Done — result card */}
+      {/* Done — full report + actions */}
       {status === "done" && result && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4 shadow-sm">
-          {/* Verdict + scam type */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <VerdictBadge verdict={result.verdict} />
-            {result.scam_type && (
-              <span className="text-sm text-gray-600">{result.scam_type}</span>
-            )}
-          </div>
-
-          {/* Reasoning excerpt */}
-          <p className="text-sm text-gray-700 leading-relaxed">
-            {result.reasoning}
-          </p>
-
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3 pt-1">
+        <div className="space-y-4">
+          {/* Actions strip */}
+          <div className="flex flex-wrap gap-3">
             <Link
               to={`/report/${jobId}`}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors"
             >
               查看完整報告
             </Link>
@@ -100,6 +87,9 @@ export default function Query() {
               再查一個
             </button>
           </div>
+
+          {/* Full report body */}
+          <ReportBody data={result} />
         </div>
       )}
 
