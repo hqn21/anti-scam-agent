@@ -245,9 +245,14 @@ function renderItem(job) {
 
     const take = document.createElement("p");
     take.className = "asa-take";
-    take.textContent = job.declined
-      ? "出現明確刷卡失敗（合法跡象）"
-      : "未出現明確刷卡失敗（詐騙常見特徵）";
+    // The card-decline signal only applies when a card was actually submitted.
+    if (!job.cardSubmitted) {
+      take.textContent = "未送出信用卡資料，此訊號不適用";
+    } else if (job.declined) {
+      take.textContent = "出現明確刷卡失敗（合法跡象）";
+    } else {
+      take.textContent = "收下偽造卡號卻未出現刷卡失敗（詐騙常見特徵）";
+    }
     li.appendChild(take);
 
     if (job.reportUrl) {

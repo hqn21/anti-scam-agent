@@ -145,11 +145,14 @@ async function pollOnce() {
       }
       if (data.status === "done") {
         const c = data.curated || {};
+        const obs = c.observation || {};
         await patchJob(job.id, {
           status: "done",
           verdict: c.verdict || "uncertain",
           scamType: c.scam_type || null,
           declined: Boolean(c.payment_explicitly_declined),
+          // Whether a card was actually submitted — the decline signal only applies then.
+          cardSubmitted: Boolean(obs.credit_card_submitted || (obs.payment_outcome && obs.payment_outcome !== "not_attempted")),
           reportUrl: `${job.base}/report/${job.id}`,
         });
       } else if (data.status === "error") {
