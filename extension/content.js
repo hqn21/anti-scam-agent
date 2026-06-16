@@ -243,17 +243,16 @@ function renderItem(job) {
     }
     li.appendChild(row);
 
-    const take = document.createElement("p");
-    take.className = "asa-take";
-    // The card-decline signal only applies when a card was actually submitted.
-    if (!job.cardSubmitted) {
-      take.textContent = "未送出信用卡資料，此訊號不適用";
-    } else if (job.declined) {
-      take.textContent = "出現明確刷卡失敗（合法跡象）";
-    } else {
-      take.textContent = "收下偽造卡號卻未出現刷卡失敗（詐騙常見特徵）";
+    // The card-decline signal only applies when a card was actually submitted; if no
+    // card was sent, omit the line entirely rather than show an irrelevant note.
+    if (job.cardSubmitted) {
+      const take = document.createElement("p");
+      take.className = "asa-take";
+      take.textContent = job.declined
+        ? "出現明確刷卡失敗（合法跡象）"
+        : "收下偽造卡號卻未出現刷卡失敗（詐騙常見特徵）";
+      li.appendChild(take);
     }
-    li.appendChild(take);
 
     if (job.reportUrl) {
       const a = document.createElement("a");

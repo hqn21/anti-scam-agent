@@ -82,52 +82,39 @@ export default function ReportBody({ data }: ReportBodyProps) {
         </div>
       </div>
 
-      {/* 2. Headline signal block — only meaningful when a card was actually submitted */}
-      {!cardSubmitted ? (
-        <div
-          className="border-2 border-gray-300 bg-gray-50 rounded-lg p-5"
-          role="region"
-          aria-labelledby="signal-heading"
-        >
-          <h2
-            id="signal-heading"
-            className="text-base font-bold text-gray-700 mb-2"
+      {/* 2. Card-decline signal — only shown when a card was actually submitted, where it
+          carries weight. It is one of several signals; the verdict also draws on the
+          reasoning, risk factors, and static signals below. */}
+      {cardSubmitted &&
+        (declined ? (
+          <div
+            className="border-2 border-green-400 bg-green-50 rounded-lg p-5"
+            role="region"
+            aria-labelledby="signal-heading"
           >
-            <span aria-hidden="true">ℹ </span>本次造訪未送出信用卡資料
-          </h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            本系統的核心偵測訊號是：提供一張偽造卡號時，合法網站背後真正的金流處理器會明確拒絕，而詐騙網站往往照單全收——但這只有在實際送出卡號時才適用。本次造訪並未進入付款／送出信用卡，因此此訊號不適用，判定改以其他證據為準（見下方判定理由與靜態訊號）。
-          </p>
-        </div>
-      ) : declined ? (
-        <div
-          className="border-2 border-green-400 bg-green-50 rounded-lg p-5"
-          role="region"
-          aria-labelledby="signal-heading"
-        >
-          <h2
-            id="signal-heading"
-            className="text-base font-bold text-green-800 mb-2"
+            <h2
+              id="signal-heading"
+              className="text-base font-bold text-green-800 mb-2"
+            >
+              <span aria-hidden="true">✓ </span>出現明確刷卡失敗
+            </h2>
+            <p className="text-sm text-green-800 leading-relaxed">
+              此網站明確回報刷卡失敗／卡號無效，代表背後有真實的金流處理器在驗證——屬於合法網站的跡象。
+            </p>
+          </div>
+        ) : (
+          <div
+            className="border-2 border-red-400 bg-red-50 rounded-lg p-5"
+            role="alert"
           >
-            <span aria-hidden="true">✓ </span>出現明確刷卡失敗
-          </h2>
-          <p className="text-sm text-green-800 leading-relaxed">
-            此網站明確回報刷卡失敗／卡號無效，代表背後有真實的金流處理器在驗證——屬於合法網站的跡象。
-          </p>
-        </div>
-      ) : (
-        <div
-          className="border-2 border-red-400 bg-red-50 rounded-lg p-5"
-          role="alert"
-        >
-          <h2 className="text-base font-bold text-red-800 mb-2">
-            <span aria-hidden="true">⚠ </span>送出偽造卡號後未出現明確刷卡失敗
-          </h2>
-          <p className="text-sm text-red-800 leading-relaxed">
-            合法網站背後有真正的金流處理器，會明確拒絕一張偽造的卡號；此網站收下了卡號卻沒有出現明確的刷卡失敗訊息——這是詐騙網站的常見特徵（它們沒有真正的金流，因此照單全收）。
-          </p>
-        </div>
-      )}
+            <h2 className="text-base font-bold text-red-800 mb-2">
+              <span aria-hidden="true">⚠ </span>送出偽造卡號後未出現明確刷卡失敗
+            </h2>
+            <p className="text-sm text-red-800 leading-relaxed">
+              合法網站背後有真正的金流處理器，會明確拒絕一張偽造的卡號；此網站收下了卡號卻沒有出現明確的刷卡失敗訊息——這是詐騙網站的常見特徵（它們沒有真正的金流，因此照單全收）。
+            </p>
+          </div>
+        ))}
 
       {/* 3. 判定理由 */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
