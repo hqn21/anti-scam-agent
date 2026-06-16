@@ -28,7 +28,7 @@ def main() -> None:
     args = parser.parse_args()
 
     url = _normalize_url(args.url)
-    assessment = asyncio.run(run_pipeline(url, verbose=args.verbose))
+    assessment, _report = asyncio.run(run_pipeline(url, verbose=args.verbose))
     print(assessment.model_dump_json(indent=2))
 
 

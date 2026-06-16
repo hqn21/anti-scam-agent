@@ -7,3 +7,6 @@ __pycache__/
 .idea/
 .ruff_cache/
 .pytest_cache/
+anti_scam.db
+web/node_modules/
+web/dist/

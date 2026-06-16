@@ -17,6 +17,8 @@ dependencies = [
     "pypinyin>=0.55.0",
     "python-dotenv>=1.2.2",
     "python-whois>=0.9.6",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
 ]
 
 [dependency-groups]
@@ -26,6 +28,7 @@ dev = [
 
 [project.scripts]
 anti-scam-agent = "anti_scam_agent.__main__:main"
+anti-scam-server = "anti_scam_agent.server:main"
 
 [build-system]
 requires = ["hatchling"]

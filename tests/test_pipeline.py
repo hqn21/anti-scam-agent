@@ -5,7 +5,7 @@ import pytest
 
 import anti_scam_agent.pipeline as pipeline
 from anti_scam_agent.models import BrowsingResult, Outcome, ScamAssessment, Verdict
-from anti_scam_agent.reporting import LLMCallMetrics, StageReport
+from anti_scam_agent.reporting import LLMCallMetrics, RunReport, StageReport
 from anti_scam_agent.signals import StaticSignals
 
 
@@ -97,3 +97,13 @@ def test_browsing_receives_inbox(monkeypatch):
     calls = _patch(monkeypatch, [Outcome.unclear])
     asyncio.run(pipeline.run_pipeline("http://shop.test"))
     assert calls["browse_inbox"] == "asalpha@agentmail.to"
+
+
+def test_pipeline_returns_assessment_and_report(monkeypatch):
+    _patch(monkeypatch, [Outcome.unclear])
+    out = asyncio.run(pipeline.run_pipeline("http://shop.test"))
+    assert isinstance(out, tuple) and len(out) == 2
+    assessment, report = out
+    assert isinstance(assessment, ScamAssessment)
+    assert isinstance(report, RunReport)
+    assert report.url == "http://shop.test"

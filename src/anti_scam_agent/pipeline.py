@@ -18,6 +18,7 @@ from anti_scam_agent.reporting import (
     write_run_report,
 )
 from anti_scam_agent.signals import collect_static_signals
+from anti_scam_agent.web_report import build_curated_report
 
 _LOGS_ROOT = Path("logs")
 
@@ -27,7 +28,7 @@ def _extract_domain(url: str) -> str:
     return hostname.removeprefix("www.")
 
 
-async def run_pipeline(url: str, verbose: bool = False) -> ScamAssessment:
+async def run_pipeline(url: str, verbose: bool = False) -> tuple[ScamAssessment, RunReport]:
     domain = _extract_domain(url)
     started_at = datetime.now().astimezone().isoformat(timespec="seconds")
     # Pre-compute the run folder so debug.log lands beside report.log/report.json.
@@ -62,8 +63,9 @@ async def run_pipeline(url: str, verbose: bool = False) -> ScamAssessment:
             is_scam=assessment.is_scam,
             scam_type=assessment.scam_type,
         )
+        report.curated = build_curated_report(assessment, report, static_signals, result)
         folder = write_run_report(report, logs_root=_LOGS_ROOT, verbose=verbose)
 
     # stderr so stdout stays the assessment-JSON contract.
     print(f"📄 report: {folder / 'report.log'}", file=sys.stderr)
-    return assessment
+    return assessment, report
