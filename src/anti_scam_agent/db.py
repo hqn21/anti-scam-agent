@@ -102,6 +102,18 @@ def mark_error(path: Path, jid: str, message: str) -> None:
         )
 
 
+def mark_interrupted(path: Path, message: str = "server shutdown") -> int:
+    """Mark any unfinished jobs (queued/running) as errored. Returns the row count.
+    Called on server shutdown so in-flight jobs don't linger as 'running' forever."""
+    with _connect(path) as conn:
+        cur = conn.execute(
+            "UPDATE analyses SET status='error', finished_at=?, error=? "
+            "WHERE status IN ('queued', 'running')",
+            (_now(), message),
+        )
+        return cur.rowcount
+
+
 def get(path: Path, jid: str) -> dict | None:
     with _connect(path) as conn:
         row = conn.execute("SELECT * FROM analyses WHERE id=?", (jid,)).fetchone()

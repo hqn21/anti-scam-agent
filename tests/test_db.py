@@ -66,6 +66,20 @@ def test_list_newest_first(dbpath):
     assert [r["id"] for r in rows][:2] == [b, a]
 
 
+def test_mark_interrupted(dbpath):
+    a = db.create_job(dbpath, "http://a.test", "web")           # stays queued
+    b = db.create_job(dbpath, "http://b.test", "web")
+    db.mark_running(dbpath, b)                                    # running
+    c = db.create_job(dbpath, "http://c.test", "web")
+    db.save_result(dbpath, c, {"verdict": "scam", "is_scam": True, "telemetry": {}})  # done
+    n = db.mark_interrupted(dbpath)
+    assert n == 2
+    assert db.get(dbpath, a)["status"] == "error"
+    assert db.get(dbpath, b)["status"] == "error"
+    assert db.get(dbpath, c)["status"] == "done"   # finished jobs untouched
+    assert db.get(dbpath, a)["error"] == "server shutdown"
+
+
 def test_stats_aggregates(dbpath):
     for v, scam in [("scam", True), ("scam", True), ("legitimate", False), ("uncertain", False)]:
         jid = db.create_job(dbpath, "http://x.test", "web")

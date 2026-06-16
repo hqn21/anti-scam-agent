@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+        db.mark_interrupted(DB_PATH)
 
 
 app = FastAPI(title="Anti-Scam Agent API", lifespan=lifespan)
