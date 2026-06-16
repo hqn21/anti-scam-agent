@@ -16,7 +16,6 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "asa-check-link" || !tab?.id) return;
   const url = info.linkUrl;
-  chrome.tabs.sendMessage(tab.id, { type: "asa:start", url });
   const base = await apiBase();
   try {
     const res = await fetch(`${base}/api/analyze`, {
@@ -24,31 +23,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, source: "extension" }),
     });
+    if (!res.ok) throw new Error("HTTP " + res.status);
     const { id } = await res.json();
-    poll(tab.id, base, id, url);
+    chrome.tabs.sendMessage(tab.id, { type: "asa:start", url, id, base }).catch(() => {});
   } catch (e) {
-    chrome.tabs.sendMessage(tab.id, { type: "asa:error", url, error: String(e) });
+    chrome.tabs.sendMessage(tab.id, { type: "asa:error", url, error: String(e) }).catch(() => {});
   }
 });
-
-async function poll(tabId, base, id, url) {
-  const deadline = Date.now() + 5 * 60 * 1000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 2000));
-    let data;
-    try {
-      data = await (await fetch(`${base}/api/analyze/${id}`)).json();
-    } catch (e) {
-      continue; // transient; keep polling
-    }
-    if (data.status === "done") {
-      chrome.tabs.sendMessage(tabId, { type: "asa:done", url, id, curated: data.curated, reportUrl: `${base}/report/${id}` });
-      return;
-    }
-    if (data.status === "error") {
-      chrome.tabs.sendMessage(tabId, { type: "asa:error", url, error: data.error || "analysis failed" });
-      return;
-    }
-  }
-  chrome.tabs.sendMessage(tabId, { type: "asa:error", url, error: "timeout" });
-}

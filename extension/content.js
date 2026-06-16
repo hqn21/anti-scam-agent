@@ -22,6 +22,8 @@ let currentHost = null;
 let elapsedIntervalId = null;
 /** @type {number|null} */
 let autoDismissTimeoutId = null;
+/** Monotonically increasing counter; each asa:start bumps it so stale poll loops self-terminate. */
+let runSeq = 0;
 
 // ---------------------------------------------------------------------------
 // Styles injected into the shadow root (content_scripts CSS doesn't reach it)
@@ -228,7 +230,7 @@ function ensureHost(url) {
   removeHost(); // start fresh
 
   const CARD_W = 260;
-  const CARD_H_APPROX = 120; // approximate height for clamping
+  const CARD_H_APPROX = 200; // approximate height for clamping
   const MARGIN = 12;
 
   const host = document.createElement("div");
@@ -301,6 +303,94 @@ const VERDICT_BADGE_CLASS = {
 };
 
 // ---------------------------------------------------------------------------
+// Rendering helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the result card with verdict, scam type, payment signal, and report link.
+ * Calls clearTimers() first, then rebuilds the overlay card.
+ * Auto-dismisses after 30 s.
+ * @param {{ url: string, id?: string, curated: object, reportUrl: string }} opts
+ */
+function renderResult({ url, id, curated, reportUrl }) {
+  clearTimers();
+  const { card } = ensureHost(url);
+
+  const curatedData = curated || {};
+  const verdict = curatedData.verdict || "uncertain";
+  const scamType = curatedData.scam_type || null;
+  const declined = Boolean(curatedData.payment_explicitly_declined);
+  const reportLink = reportUrl || "";
+
+  const result = document.createElement("div");
+  result.className = "asa-result";
+
+  // Badge
+  const badge = document.createElement("span");
+  badge.className = `asa-badge ${VERDICT_BADGE_CLASS[verdict] || "asa-badge--uncertain"}`;
+  badge.textContent = VERDICT_LABEL[verdict] || verdict;
+  result.appendChild(badge);
+
+  // Scam type (optional)
+  if (scamType) {
+    const typeEl = document.createElement("p");
+    typeEl.className = "asa-meta";
+    typeEl.textContent = `類型：${scamType}`;
+    result.appendChild(typeEl);
+  }
+
+  // Payment signal takeaway
+  const payEl = document.createElement("p");
+  payEl.className = "asa-meta";
+  payEl.textContent = declined
+    ? "出現明確刷卡失敗（合法跡象）"
+    : "未出現明確刷卡失敗（詐騙常見特徵）";
+  result.appendChild(payEl);
+
+  // Report link
+  if (reportLink) {
+    const link = document.createElement("a");
+    link.className = "asa-link";
+    link.href = reportLink;
+    link.textContent = "看完整報告";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.addEventListener("click", () => {
+      // Allow the link to open, then close the card shortly after
+      setTimeout(removeHost, 300);
+    });
+    result.appendChild(link);
+  }
+
+  card.appendChild(result);
+
+  // Auto-dismiss after 30 s
+  autoDismissTimeoutId = setTimeout(removeHost, 30_000);
+}
+
+/**
+ * Render an error card. Does NOT auto-dismiss (errors should stay until read).
+ * Calls clearTimers() first, then rebuilds the overlay card.
+ * "timeout" in the error string is rendered as "檢查逾時".
+ * @param {{ url: string, error: string }} opts
+ */
+function renderError({ url, error }) {
+  clearTimers();
+  const { card } = ensureHost(url);
+
+  const rawError = String(error || "");
+  const friendlyError =
+    rawError.toLowerCase().includes("timeout")
+      ? "檢查逾時"
+      : rawError || "未知錯誤";
+
+  const errEl = document.createElement("p");
+  errEl.className = "asa-error-text";
+  errEl.textContent = `檢查失敗：${friendlyError}`;
+  card.appendChild(errEl);
+}
+
+// ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
 if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
@@ -308,6 +398,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
     if (!msg || !msg.type) return;
 
     if (msg.type === "asa:start") {
+      const myRun = ++runSeq;
       const { card } = ensureHost(msg.url);
 
       // Spinner + elapsed counter
@@ -330,81 +421,47 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
         elapsed += 1;
         statusText.textContent = `檢查中… ${elapsed}s`;
       }, 1000);
+
+      // Poll from the content script so MV3 SW termination can't stall the result.
+      if (msg.id && msg.base) {
+        const id = msg.id, base = msg.base, url = msg.url;
+        const deadline = Date.now() + 5 * 60 * 1000;
+        (async () => {
+          while (Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 2000));
+            // Stop if this run was superseded or the overlay was manually closed.
+            if (myRun !== runSeq || currentHost === null) return;
+            let data;
+            try {
+              data = await (await fetch(`${base}/api/analyze/${id}`)).json();
+            } catch {
+              continue;
+            }
+            // Re-check staleness after the async fetch.
+            if (myRun !== runSeq || currentHost === null) return;
+            if (data.status === "done") {
+              renderResult({ url, id, curated: data.curated, reportUrl: `${base}/report/${id}` });
+              return;
+            }
+            if (data.status === "error") {
+              renderError({ url, error: data.error || "analysis failed" });
+              return;
+            }
+          }
+          if (myRun !== runSeq || currentHost === null) return;
+          renderError({ url, error: "timeout" });
+        })();
+      }
       return;
     }
 
     if (msg.type === "asa:done") {
-      clearTimers();
-      const { card } = ensureHost(msg.url);
-
-      const curated = msg.curated || {};
-      const verdict = curated.verdict || "uncertain";
-      const isScam = Boolean(curated.is_scam);
-      const scamType = curated.scam_type || null;
-      const declined = Boolean(curated.payment_explicitly_declined);
-      const reportUrl = msg.reportUrl || "";
-
-      const result = document.createElement("div");
-      result.className = "asa-result";
-
-      // Badge
-      const badge = document.createElement("span");
-      badge.className = `asa-badge ${VERDICT_BADGE_CLASS[verdict] || "asa-badge--uncertain"}`;
-      badge.textContent = VERDICT_LABEL[verdict] || verdict;
-      result.appendChild(badge);
-
-      // Scam type (optional)
-      if (scamType) {
-        const typeEl = document.createElement("p");
-        typeEl.className = "asa-meta";
-        typeEl.textContent = `類型：${scamType}`;
-        result.appendChild(typeEl);
-      }
-
-      // Payment signal takeaway
-      const payEl = document.createElement("p");
-      payEl.className = "asa-meta";
-      payEl.textContent = declined
-        ? "出現明確刷卡失敗（合法跡象）"
-        : "未出現明確刷卡失敗（詐騙常見特徵）";
-      result.appendChild(payEl);
-
-      // Report link
-      if (reportUrl) {
-        const link = document.createElement("a");
-        link.className = "asa-link";
-        link.href = reportUrl;
-        link.textContent = "看完整報告";
-        link.target = "_blank";
-        link.rel = "noopener";
-        link.addEventListener("click", () => {
-          // Allow the link to open, then close the card shortly after
-          setTimeout(removeHost, 300);
-        });
-        result.appendChild(link);
-      }
-
-      card.appendChild(result);
-
-      // Auto-dismiss after 30 s
-      autoDismissTimeoutId = setTimeout(removeHost, 30_000);
+      renderResult(msg);
       return;
     }
 
     if (msg.type === "asa:error") {
-      clearTimers();
-      const { card } = ensureHost(msg.url);
-
-      const rawError = String(msg.error || "");
-      const friendlyError =
-        rawError.toLowerCase().includes("timeout")
-          ? "檢查逾時"
-          : rawError || "未知錯誤";
-
-      const errEl = document.createElement("p");
-      errEl.className = "asa-error-text";
-      errEl.textContent = `檢查失敗：${friendlyError}`;
-      card.appendChild(errEl);
+      renderError(msg);
     }
   });
 }
