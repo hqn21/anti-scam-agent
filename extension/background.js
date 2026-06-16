@@ -15,7 +15,11 @@
 const DEFAULT_API = "http://localhost:8000";
 const JOBS_KEY = "asa_jobs";
 const POLL_INTERVAL_MS = 2000;
-const POLL_DEADLINE_MS = 5 * 60 * 1000;
+// No client-side time limit: the server's pipeline always reaches a terminal status
+// (browsing has its own ~8-min timeout and the run is failure-tolerant, and the worker
+// is serialized so queued jobs may wait a while). We poll until the server says
+// done/error, and only give up if the server is unreachable for many consecutive ticks.
+const MAX_CONSECUTIVE_FAILURES = 15; // ~30s of unreachability at the 2s interval
 const ALARM_NAME = "asa-poll";
 
 async function apiBase() {
@@ -111,25 +115,33 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 let pollingActive = false;
 
+/** jobId -> consecutive fetch-failure count. In-memory; resets on SW restart (harmless). */
+const failureCounts = new Map();
+
 async function pollOnce() {
   const jobs = await getJobs();
   const active = jobs.filter((j) => !isTerminal(j.status) && !String(j.id).startsWith("local-"));
-  if (active.length === 0) return false;
+  if (active.length === 0) {
+    failureCounts.clear();
+    return false;
+  }
 
   await Promise.all(
     active.map(async (job) => {
-      // Give up on jobs that have run past the deadline.
-      if (Date.now() - (job.createdAt || 0) > POLL_DEADLINE_MS) {
-        await patchJob(job.id, { status: "error", error: "檢查逾時" });
-        return;
-      }
       let data;
       try {
         const r = await fetch(`${job.base}/api/analyze/${job.id}`);
-        if (!r.ok) return; // transient (e.g. 404 right after create); retry next tick
+        if (!r.ok) throw new Error("HTTP " + r.status);
         data = await r.json();
+        failureCounts.delete(job.id); // server reachable -> reset
       } catch {
-        return; // server momentarily unreachable; retry next tick
+        const n = (failureCounts.get(job.id) || 0) + 1;
+        failureCounts.set(job.id, n);
+        if (n >= MAX_CONSECUTIVE_FAILURES) {
+          await patchJob(job.id, { status: "error", error: "伺服器無法連線" });
+          failureCounts.delete(job.id);
+        }
+        return; // otherwise just retry next tick
       }
       if (data.status === "done") {
         const c = data.curated || {};
