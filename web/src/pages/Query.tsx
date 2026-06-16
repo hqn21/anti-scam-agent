@@ -24,7 +24,7 @@ export default function Query() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-6">
       {/* Page heading */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">查詢</h1>

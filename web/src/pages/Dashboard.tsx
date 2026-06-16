@@ -49,13 +49,13 @@ export default function Dashboard() {
       });
   }, []);
 
-  if (loading) return <p className="p-6 text-gray-500">載入中…</p>;
-  if (error || !stats) return <p className="p-6 text-red-500">載入失敗</p>;
+  if (loading) return <p className="text-gray-500">載入中…</p>;
+  if (error || !stats) return <p className="text-red-500">載入失敗</p>;
 
   if (stats.total === 0) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">儀表板</h1>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">儀表板</h1>
         <div className="bg-white border rounded-lg p-8 text-center text-gray-500">
           尚無分析紀錄，前往
           <Link to="/query" className="text-blue-600 underline mx-1">
@@ -77,8 +77,10 @@ export default function Dashboard() {
     ([name, value]) => ({ name, value })
   );
 
+  const avgCost = stats.total > 0 ? stats.total_cost_usd / stats.total : 0;
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold">儀表板</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -106,6 +108,10 @@ export default function Dashboard() {
         <StatCard
           label="平均耗時"
           value={stats.avg_duration_s.toFixed(1) + "s"}
+        />
+        <StatCard
+          label="平均成本"
+          value={"$" + avgCost.toFixed(4)}
         />
         <StatCard
           label="總成本"

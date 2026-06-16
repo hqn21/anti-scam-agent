@@ -29,16 +29,12 @@ export default function Report() {
   }, [id]);
 
   if (loading) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-gray-500">載入中…</p>
-      </div>
-    );
+    return <p className="text-sm text-gray-500">載入中…</p>;
   }
 
   if (notFound || !data) {
     return (
-      <div className="p-6 space-y-3">
+      <div className="space-y-3">
         <p className="text-sm text-gray-700">
           找不到報告，或分析尚未完成。
         </p>
@@ -53,7 +49,7 @@ export default function Report() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-4">
+    <div className="space-y-4">
       <Link
         to="/history"
         className="inline-block text-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
