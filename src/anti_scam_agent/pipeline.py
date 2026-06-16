@@ -27,7 +27,7 @@ def _extract_domain(url: str) -> str:
     return hostname.removeprefix("www.")
 
 
-async def run_pipeline(url: str, verbose: bool = False) -> ScamAssessment:
+async def run_pipeline(url: str, verbose: bool = False) -> tuple[ScamAssessment, RunReport]:
     domain = _extract_domain(url)
     started_at = datetime.now().astimezone().isoformat(timespec="seconds")
     # Pre-compute the run folder so debug.log lands beside report.log/report.json.
@@ -66,4 +66,4 @@ async def run_pipeline(url: str, verbose: bool = False) -> ScamAssessment:
 
     # stderr so stdout stays the assessment-JSON contract.
     print(f"📄 report: {folder / 'report.log'}", file=sys.stderr)
-    return assessment
+    return assessment, report
