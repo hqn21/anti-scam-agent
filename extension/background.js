@@ -159,7 +159,12 @@ async function pollOnce() {
         await patchJob(job.id, { status: "error", error: data.error || "分析失敗" });
       } else {
         // queued / running -> reflect the latest server status
-        if (job.status !== data.status) await patchJob(job.id, { status: data.status });
+        if (job.status !== data.status) {
+          const patch = { status: data.status };
+          // Stamp when analysis actually starts so the UI timer can exclude queue wait.
+          if (data.status === "running" && !job.runningAt) patch.runningAt = Date.now();
+          await patchJob(job.id, patch);
+        }
       }
     })
   );

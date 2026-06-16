@@ -207,7 +207,9 @@ function removePanel() {
 }
 
 function elapsedSeconds(job) {
-  return Math.max(0, Math.floor((Date.now() - (job.createdAt || Date.now())) / 1000));
+  // Count from when analysis actually started, not from when it entered the queue.
+  const base = job.runningAt || job.createdAt || Date.now();
+  return Math.max(0, Math.floor((Date.now() - base) / 1000));
 }
 
 function renderItem(job) {
@@ -228,13 +230,18 @@ function renderItem(job) {
     sp.className = "asa-spinner";
     const txt = document.createElement("span");
     txt.className = "asa-status";
-    const label = job.status === "queued" ? "排隊中" : "分析中";
-    txt.textContent = `${label}… ${elapsedSeconds(job)}s`;
     row.appendChild(sp);
     row.appendChild(txt);
     li.appendChild(row);
-    // Let the ticker update just this text node, so the spinner keeps spinning smoothly.
-    activeTextEls.push({ el: txt, job, label });
+    if (job.status === "queued") {
+      // No elapsed seconds while queued: that time isn't the analysis time.
+      txt.textContent = "排隊中…";
+    } else {
+      const label = "分析中";
+      txt.textContent = `${label}… ${elapsedSeconds(job)}s`;
+      // Let the ticker update just this text node, so the spinner keeps spinning smoothly.
+      activeTextEls.push({ el: txt, job, label });
+    }
   } else if (job.status === "done") {
     const badge = document.createElement("span");
     const verdict = job.verdict || "uncertain";
