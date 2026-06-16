@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from typing import TYPE_CHECKING
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 _MAX_STEPS = 20
 _TIMEOUT_SECONDS = 480  # 15 minutes
+# Headless by default (servers/CI have no display); set ASA_HEADLESS=0 to watch the
+# browser while debugging.
+_HEADLESS = os.environ.get("ASA_HEADLESS", "1") not in ("0", "false", "False")
 # One action per step: the DOM (and its click indices) is re-serialized before every
 # action, so a click can never fire against a stale index from before the page changed.
 # This is the robust guard against same-URL in-place DOM re-renders (SPA / client-rendered
@@ -371,7 +375,7 @@ async def run_browsing_agent(
         minimum_wait_page_load_time=1.0,
         wait_for_network_idle_page_load_time=2.0,
         wait_between_actions=0.5,
-        headless=False,
+        headless=_HEADLESS,
         disable_security=True,
         cross_origin_iframes=True,
         # paint_order_filtering disabled: the (experimental) occlusion filter also drops
