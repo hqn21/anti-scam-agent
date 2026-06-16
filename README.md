@@ -122,10 +122,13 @@ npm --prefix web run dev        # terminal 2 → http://localhost:5173
 
 ## 4. Chrome extension
 
-Right-click any link on any page → **"用 Anti-Scam Agent 檢查此連結"**. A small overlay
-appears near the link showing a live "檢查中…Xs" counter, then a verdict badge and a link to
-the full report. Because the check goes through the same API, it also shows up in the web
-app's **History**.
+Right-click any link on any page → **"用 Anti-Scam Agent 檢查此連結"**. A panel appears in the
+**bottom-right corner** listing each check: a live "分析中…Xs" counter while it runs, then a
+verdict badge, the headline card-decline takeaway, and a link to the full report. Each item
+can be dismissed individually (other checks keep running), and "清除已完成" clears finished
+ones. The panel is driven by the extension's background worker via `chrome.storage`, so
+progress is never lost when you close an item or navigate. Because checks go through the same
+API, they also show up in the web app's **History**.
 
 **Load it (unpacked):**
 
