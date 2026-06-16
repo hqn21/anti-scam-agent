@@ -77,3 +77,16 @@ def test_stats(client):
     s = client.get("/api/stats").json()
     assert s["total"] >= 1
     assert s["scam_count"] >= 1
+
+
+def test_analyze_worker_error_path(tmp_path, monkeypatch):
+    async def boom(url, verbose=False):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(api_mod, "DB_PATH", tmp_path / "err.db")
+    monkeypatch.setattr(api_mod, "run_pipeline", boom)
+    with TestClient(api_mod.app) as c:
+        jid = c.post("/api/analyze", json={"url": "shop.test", "source": "web"}).json()["id"]
+        done = _wait_done(c, jid)
+    assert done["status"] == "error"
+    assert "kaboom" in (done["error"] or "")

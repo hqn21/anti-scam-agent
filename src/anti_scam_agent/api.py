@@ -5,11 +5,13 @@ job id, and poll. Also serves the built web app from web/dist when present."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +34,7 @@ def _normalize_url(raw: str) -> str:
 
 class AnalyzeRequest(BaseModel):
     url: str
-    source: str = "web"
+    source: Literal["web", "extension"] = "web"
 
 
 async def _worker(app: FastAPI) -> None:
@@ -64,6 +66,8 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 app = FastAPI(title="Anti-Scam Agent API", lifespan=lifespan)
@@ -75,8 +79,7 @@ app.add_middleware(
 @app.post("/api/analyze", status_code=202)
 async def analyze(req: AnalyzeRequest):
     url = _normalize_url(req.url)
-    source = req.source if req.source in ("web", "extension") else "web"
-    jid = db.create_job(DB_PATH, url, source)
+    jid = db.create_job(DB_PATH, url, req.source)
     await app.state.queue.put(jid)
     return {"id": jid, "status": "queued"}
 
@@ -100,8 +103,10 @@ async def analyses(limit: int = 50, offset: int = 0, status: str | None = None):
 @app.get("/api/analyses/{jid}")
 async def analysis_detail(jid: str):
     row = db.get(DB_PATH, jid)
-    if row is None or not row["report_json"]:
+    if row is None:
         raise HTTPException(status_code=404, detail="not found")
+    if not row["report_json"]:
+        raise HTTPException(status_code=409, detail=f"job is {row['status']}")
     return json.loads(row["report_json"])
 
 
