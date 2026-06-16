@@ -18,6 +18,7 @@ from anti_scam_agent.reporting import (
     write_run_report,
 )
 from anti_scam_agent.signals import collect_static_signals
+from anti_scam_agent.web_report import build_curated_report
 
 _LOGS_ROOT = Path("logs")
 
@@ -62,6 +63,7 @@ async def run_pipeline(url: str, verbose: bool = False) -> tuple[ScamAssessment,
             is_scam=assessment.is_scam,
             scam_type=assessment.scam_type,
         )
+        report.curated = build_curated_report(assessment, report, static_signals, result)
         folder = write_run_report(report, logs_root=_LOGS_ROOT, verbose=verbose)
 
     # stderr so stdout stays the assessment-JSON contract.

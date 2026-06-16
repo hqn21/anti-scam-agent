@@ -138,6 +138,7 @@ class RunReport(BaseModel):
     verdict: str | None = None
     is_scam: bool | None = None
     scam_type: str | None = None
+    curated: dict | None = None
 
     @classmethod
     def build(
