@@ -21,6 +21,10 @@ let shadow = null;
 let tickIntervalId = null;
 /** @type {Array<object>} */
 let jobs = [];
+/** Active items' elapsed-text spans, so the ticker can update text WITHOUT rebuilding the
+ *  DOM (a rebuild would restart the spinner's CSS animation and make it stutter).
+ *  @type {Array<{ el: HTMLElement, job: object, label: string }>} */
+let activeTextEls = [];
 
 const VERDICT_LABEL = {
   scam: "詐騙",
@@ -229,6 +233,8 @@ function renderItem(job) {
     row.appendChild(sp);
     row.appendChild(txt);
     li.appendChild(row);
+    // Let the ticker update just this text node, so the spinner keeps spinning smoothly.
+    activeTextEls.push({ el: txt, job, label });
   } else if (job.status === "done") {
     const badge = document.createElement("span");
     const verdict = job.verdict || "uncertain";
@@ -284,6 +290,7 @@ function renderItem(job) {
 
 function render() {
   if (!jobs || jobs.length === 0) {
+    activeTextEls = [];
     removePanel();
     stopTicker();
     return;
@@ -296,6 +303,9 @@ function render() {
 
   const panel = document.createElement("div");
   panel.className = "asa-panel";
+
+  // Rebuild the active-text registry for this structural render.
+  activeTextEls = [];
 
   const head = document.createElement("div");
   head.className = "asa-head";
@@ -325,12 +335,23 @@ function render() {
   manageTicker();
 }
 
-// A 1s ticker re-renders while any job is still running, to advance the elapsed
-// counter. It stops once everything is terminal.
+// Advance only the elapsed-time text of active items. Does NOT rebuild the DOM, so the
+// spinner's CSS animation runs uninterrupted (rebuilding it every second made it stutter).
+function tick() {
+  if (activeTextEls.length === 0) {
+    stopTicker();
+    return;
+  }
+  for (const { el, job, label } of activeTextEls) {
+    el.textContent = `${label}… ${elapsedSeconds(job)}s`;
+  }
+}
+
+// Run the 1s ticker while any item is still active; stop once everything is terminal.
 function manageTicker() {
-  const anyActive = jobs.some((j) => j.status === "queued" || j.status === "running");
+  const anyActive = activeTextEls.length > 0;
   if (anyActive && tickIntervalId === null) {
-    tickIntervalId = setInterval(render, 1000);
+    tickIntervalId = setInterval(tick, 1000);
   } else if (!anyActive) {
     stopTicker();
   }
