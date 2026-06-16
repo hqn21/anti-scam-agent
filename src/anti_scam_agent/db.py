@@ -7,6 +7,7 @@ import json
 import os
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -43,10 +44,15 @@ def _domain(url: str) -> str:
     return (urlparse(url).hostname or "").removeprefix("www.")
 
 
-def _connect(path: Path) -> sqlite3.Connection:
+@contextmanager
+def _connect(path: Path):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        with conn:            # commit on success / rollback on exception
+            yield conn
+    finally:
+        conn.close()
 
 
 def init_db(path: Path = DEFAULT_DB_PATH) -> None:
