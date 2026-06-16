@@ -15,6 +15,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -116,6 +117,21 @@ async def stats():
     return db.stats(DB_PATH)
 
 
-# Serve the built SPA at / when present (after a `npm run build` in web/).
+# Serve the built SPA when present (after a `npm run build` in web/). Hashed assets are
+# served from /assets; every other non-API path falls back to index.html so client-side
+# routes like /report/<id>, /history, /query work on a direct hit or a new-tab open.
 if _WEB_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=_WEB_DIST, html=True), name="web")
+    app.mount("/assets", StaticFiles(directory=_WEB_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="not found")
+        candidate = (_WEB_DIST / full_path).resolve()
+        if (
+            full_path
+            and candidate.is_file()
+            and candidate.is_relative_to(_WEB_DIST.resolve())
+        ):
+            return FileResponse(candidate)
+        return FileResponse(_WEB_DIST / "index.html")

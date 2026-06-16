@@ -90,3 +90,15 @@ def test_analyze_worker_error_path(tmp_path, monkeypatch):
         done = _wait_done(c, jid)
     assert done["status"] == "error"
     assert "kaboom" in (done["error"] or "")
+
+
+@pytest.mark.skipif(not api_mod._WEB_DIST.is_dir(), reason="web app not built (no web/dist)")
+def test_spa_deep_link_falls_back_to_index(client):
+    # A client-side route hit directly must serve index.html (not a 404), so links
+    # like /report/<id> opened from the extension work.
+    r = client.get("/report/some-id")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert '<div id="root"' in r.text
+    # API paths must still 404 rather than fall back to the SPA.
+    assert client.get("/api/analyze/nope").status_code == 404
