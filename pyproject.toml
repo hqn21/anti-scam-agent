@@ -28,6 +28,7 @@ dev = [
 
 [project.scripts]
 anti-scam-agent = "anti_scam_agent.__main__:main"
+anti-scam-server = "anti_scam_agent.server:main"
 
 [build-system]
 requires = ["hatchling"]
