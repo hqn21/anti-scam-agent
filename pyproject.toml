@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
     { name="Hao-Quan Liu", email="contact@haoquan.me" }
 ]
-description = "Anti-Spam Agent is a multi-agent system that uses LLMs to impersonate real users on specified web pages and detect data-phishing attempts in real time, without relying on blacklist databases."
+description = "Anti-Scam Agent is a multi-agent system that uses LLMs to impersonate real users on specified web pages and detect data-phishing attempts in real time, without relying on blacklist databases."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
