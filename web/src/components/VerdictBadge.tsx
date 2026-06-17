@@ -19,12 +19,12 @@ const pillClasses: Record<Verdict, string> = {
   legitimate: "bg-green-200 text-green-800",
 };
 
-const chineseLabel: Record<Verdict, string> = {
-  scam: "詐騙",
-  likely_scam: "可能詐騙",
-  uncertain: "不確定",
-  likely_legitimate: "可能合法",
-  legitimate: "合法",
+const verdictLabel: Record<Verdict, string> = {
+  scam: "Scam",
+  likely_scam: "Likely scam",
+  uncertain: "Uncertain",
+  likely_legitimate: "Likely legitimate",
+  legitimate: "Legitimate",
 };
 
 interface VerdictBadgeProps {
@@ -36,7 +36,7 @@ export default function VerdictBadge({ verdict }: VerdictBadgeProps) {
     <span
       className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${pillClasses[verdict]}`}
     >
-      {chineseLabel[verdict]}
+      {verdictLabel[verdict]}
     </span>
   );
 }

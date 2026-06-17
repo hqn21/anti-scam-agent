@@ -29,20 +29,20 @@ export default function Report() {
   }, [id]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">載入中…</p>;
+    return <p className="text-sm text-gray-500">Loading…</p>;
   }
 
   if (notFound || !data) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-gray-700">
-          找不到報告，或分析尚未完成。
+          Report not found, or the analysis is not finished yet.
         </p>
         <Link
           to="/history"
           className="inline-block text-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
         >
-          ← 返回歷史紀錄
+          ← Back to History
         </Link>
       </div>
     );
@@ -54,7 +54,7 @@ export default function Report() {
         to="/history"
         className="inline-block text-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
       >
-        ← 返回歷史紀錄
+        ← Back to History
       </Link>
       <ReportBody data={data} />
     </div>

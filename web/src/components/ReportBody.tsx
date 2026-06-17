@@ -21,10 +21,10 @@ function boolOrDash(
 
 function mapOutcome(s: string): string {
   const map: Record<string, string> = {
-    succeeded: "成功",
-    failed: "失敗",
-    unclear: "不明",
-    not_attempted: "未嘗試",
+    succeeded: "Succeeded",
+    failed: "Failed",
+    unclear: "Unclear",
+    not_attempted: "Not attempted",
   };
   return map[s] ?? s;
 }
@@ -68,14 +68,14 @@ export default function ReportBody({ data }: ReportBodyProps) {
               {data.url}
             </p>
             <p className="mt-1 text-xs text-gray-400">
-              {new Date(data.started_at).toLocaleString("zh-TW")}
+              {new Date(data.started_at).toLocaleString("en-US")}
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <VerdictBadge verdict={data.verdict} />
             {data.scam_type && (
               <span className="text-xs text-gray-600">
-                類型：{data.scam_type}
+                Type: {data.scam_type}
               </span>
             )}
           </div>
@@ -96,10 +96,12 @@ export default function ReportBody({ data }: ReportBodyProps) {
               id="signal-heading"
               className="text-base font-bold text-green-800 mb-2"
             >
-              <span aria-hidden="true">✓ </span>出現明確刷卡失敗
+              <span aria-hidden="true">✓ </span>Explicit card decline observed
             </h2>
             <p className="text-sm text-green-800 leading-relaxed">
-              此網站明確回報刷卡失敗／卡號無效，代表背後有真實的金流處理器在驗證——屬於合法網站的跡象。
+              This site explicitly reported a card decline or invalid card, which
+              means a real payment processor is validating behind it. That points to
+              a legitimate site.
             </p>
           </div>
         ) : (
@@ -108,18 +110,21 @@ export default function ReportBody({ data }: ReportBodyProps) {
             role="alert"
           >
             <h2 className="text-base font-bold text-red-800 mb-2">
-              <span aria-hidden="true">⚠ </span>送出偽造卡號後未出現明確刷卡失敗
+              <span aria-hidden="true">⚠ </span>No explicit card decline after submitting a fabricated card
             </h2>
             <p className="text-sm text-red-800 leading-relaxed">
-              合法網站背後有真正的金流處理器，會明確拒絕一張偽造的卡號；此網站收下了卡號卻沒有出現明確的刷卡失敗訊息——這是詐騙網站的常見特徵（它們沒有真正的金流，因此照單全收）。
+              A legitimate site has a real payment processor that explicitly
+              rejects a fabricated card. This site accepted the card without any
+              explicit decline, a common trait of scam sites: with no real payment
+              flow, they take whatever is submitted.
             </p>
           </div>
         ))}
 
-      {/* 3. 判定理由 */}
+      {/* 3. Reasoning */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
         <h2 className="text-base font-semibold text-gray-900 mb-3">
-          判定理由
+          Reasoning
         </h2>
         <p className="text-sm text-gray-700 leading-relaxed">{data.reasoning}</p>
         {data.risk_factors.length > 0 && (
@@ -133,14 +138,14 @@ export default function ReportBody({ data }: ReportBodyProps) {
         )}
       </div>
 
-      {/* 4. 造訪觀察 */}
+      {/* 4. Browsing observation */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-5">
-        <h2 className="text-base font-semibold text-gray-900">造訪觀察</h2>
+        <h2 className="text-base font-semibold text-gray-900">Browsing observation</h2>
 
         {/* website_summary */}
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            網站摘要
+            Website summary
           </h3>
           <p className="text-sm text-gray-700 leading-relaxed">
             {obs.website_summary}
@@ -150,10 +155,10 @@ export default function ReportBody({ data }: ReportBodyProps) {
         {/* form_fields_requested */}
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            要求的資料欄位
+            Requested form fields
           </h3>
           {obs.form_fields_requested.length === 0 ? (
-            <span className="text-sm text-gray-400">無</span>
+            <span className="text-sm text-gray-400">None</span>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {obs.form_fields_requested.map((f, i) => (
@@ -171,10 +176,10 @@ export default function ReportBody({ data }: ReportBodyProps) {
         {/* unexpected_events */}
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            異常事件
+            Unexpected events
           </h3>
           {obs.unexpected_events.length === 0 ? (
-            <span className="text-sm text-gray-400">無</span>
+            <span className="text-sm text-gray-400">None</span>
           ) : (
             <ul className="space-y-0.5 list-disc list-inside">
               {obs.unexpected_events.map((ev, i) => (
@@ -190,7 +195,7 @@ export default function ReportBody({ data }: ReportBodyProps) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              登入結果
+              Login outcome
             </h3>
             <p className="text-sm text-gray-800">
               {mapOutcome(obs.login_outcome)}
@@ -198,7 +203,7 @@ export default function ReportBody({ data }: ReportBodyProps) {
           </div>
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              付款結果
+              Payment outcome
             </h3>
             <p className="text-sm text-gray-800">
               {mapOutcome(obs.payment_outcome)}
@@ -206,10 +211,10 @@ export default function ReportBody({ data }: ReportBodyProps) {
           </div>
           <div>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              是否送出信用卡
+              Credit card submitted
             </h3>
             <p className="text-sm text-gray-800">
-              {obs.credit_card_submitted ? "是" : "否"}
+              {obs.credit_card_submitted ? "Yes" : "No"}
             </p>
           </div>
         </div>
@@ -217,10 +222,10 @@ export default function ReportBody({ data }: ReportBodyProps) {
         {/* outgoing_links */}
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-            外連網域
+            Outgoing domains
           </h3>
           {obs.outgoing_links.length === 0 ? (
-            <span className="text-sm text-gray-400">無</span>
+            <span className="text-sm text-gray-400">None</span>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {obs.outgoing_links.map((link, i) => (
@@ -236,45 +241,45 @@ export default function ReportBody({ data }: ReportBodyProps) {
         </div>
       </div>
 
-      {/* 5. 靜態訊號 */}
+      {/* 5. Static signals */}
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-gray-900 mb-4">靜態訊號</h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Static signals</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
           {(
             [
               {
-                label: "網域年齡",
+                label: "Domain age",
                 value:
                   sig.domain_age_days != null
-                    ? `${sig.domain_age_days} 天`
+                    ? `${sig.domain_age_days} days`
                     : "—",
               },
               {
-                label: "到期天數",
+                label: "Days until expiration",
                 value:
                   sig.domain_days_until_expiration != null
-                    ? `${sig.domain_days_until_expiration} 天`
+                    ? `${sig.domain_days_until_expiration} days`
                     : "—",
               },
-              { label: "註冊商", value: nullOrDash(sig.registrar) },
-              { label: "註冊國", value: nullOrDash(sig.registrant_country) },
+              { label: "Registrar", value: nullOrDash(sig.registrar) },
+              { label: "Registrant country", value: nullOrDash(sig.registrant_country) },
               {
-                label: "隱私保護",
-                value: boolOrDash(sig.privacy_protected, "是", "否"),
+                label: "Privacy protected",
+                value: boolOrDash(sig.privacy_protected, "Yes", "No"),
               },
-              { label: "TLS 簽發者", value: nullOrDash(sig.tls_issuer) },
+              { label: "TLS issuer", value: nullOrDash(sig.tls_issuer) },
               {
-                label: "TLS 憑證年齡",
+                label: "TLS certificate age",
                 value:
-                  sig.tls_age_days != null ? `${sig.tls_age_days} 天` : "—",
+                  sig.tls_age_days != null ? `${sig.tls_age_days} days` : "—",
               },
               {
-                label: "免費 DV 憑證",
-                value: boolOrDash(sig.tls_is_free_dv, "是", "否"),
+                label: "Free DV certificate",
+                value: boolOrDash(sig.tls_is_free_dv, "Yes", "No"),
               },
               {
-                label: "MX 紀錄",
-                value: boolOrDash(sig.dns_has_mx, "有", "無"),
+                label: "MX record",
+                value: boolOrDash(sig.dns_has_mx, "Yes", "No"),
               },
               {
                 label: "Nameservers",
@@ -293,10 +298,10 @@ export default function ReportBody({ data }: ReportBodyProps) {
         </dl>
       </div>
 
-      {/* 6. 執行資訊 */}
+      {/* 6. Run info */}
       <div className="text-xs text-gray-400 px-1 pb-4 space-y-1">
         <p>
-          耗時 {tel.duration_s.toFixed(1)}s・成本 {costStr}・Tokens{" "}
+          Duration {tel.duration_s.toFixed(1)}s · Cost {costStr} · Tokens{" "}
           {tel.total_tokens.toLocaleString()}
         </p>
         {stageStr && <p>{stageStr}</p>}

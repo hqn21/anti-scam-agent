@@ -20,13 +20,13 @@ export default function Layout({ children }: LayoutProps) {
           </span>
           <div className="flex items-center gap-1">
             <NavLink to="/" end className={navLinkClass}>
-              儀表板
+              Dashboard
             </NavLink>
             <NavLink to="/query" className={navLinkClass}>
-              查詢
+              Query
             </NavLink>
             <NavLink to="/history" className={navLinkClass}>
-              歷史紀錄
+              History
             </NavLink>
           </div>
         </div>

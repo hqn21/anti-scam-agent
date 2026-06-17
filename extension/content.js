@@ -27,11 +27,11 @@ let jobs = [];
 let activeTextEls = [];
 
 const VERDICT_LABEL = {
-  scam: "詐騙",
-  likely_scam: "可能詐騙",
-  uncertain: "不確定",
-  likely_legitimate: "可能合法",
-  legitimate: "合法",
+  scam: "Scam",
+  likely_scam: "Likely scam",
+  uncertain: "Uncertain",
+  likely_legitimate: "Likely legitimate",
+  legitimate: "Legitimate",
 };
 const VERDICT_BADGE_CLASS = {
   scam: "asa-badge--scam",
@@ -235,9 +235,9 @@ function renderItem(job) {
     li.appendChild(row);
     if (job.status === "queued") {
       // No elapsed seconds while queued: that time isn't the analysis time.
-      txt.textContent = "排隊中…";
+      txt.textContent = "Queued…";
     } else {
-      const label = "分析中";
+      const label = "Analyzing";
       txt.textContent = `${label}… ${elapsedSeconds(job)}s`;
       // Let the ticker update just this text node, so the spinner keeps spinning smoothly.
       activeTextEls.push({ el: txt, job, label });
@@ -262,8 +262,8 @@ function renderItem(job) {
       const take = document.createElement("p");
       take.className = "asa-take";
       take.textContent = job.declined
-        ? "出現明確刷卡失敗（合法跡象）"
-        : "收下偽造卡號卻未出現刷卡失敗（詐騙常見特徵）";
+        ? "Explicit card decline observed (sign of a legitimate site)"
+        : "Accepted a fabricated card with no decline (common scam trait)";
       li.appendChild(take);
     }
 
@@ -273,13 +273,13 @@ function renderItem(job) {
       a.href = job.reportUrl;
       a.target = "_blank";
       a.rel = "noopener";
-      a.textContent = "看完整報告 →";
+      a.textContent = "View full report →";
       li.appendChild(a);
     }
   } else if (job.status === "error") {
     const err = document.createElement("span");
     err.className = "asa-error";
-    err.textContent = `失敗：${job.error || "未知錯誤"}`;
+    err.textContent = `Failed: ${job.error || "unknown error"}`;
     row.appendChild(err);
     li.appendChild(row);
   }
@@ -287,8 +287,8 @@ function renderItem(job) {
   const x = document.createElement("button");
   x.className = "asa-x";
   x.textContent = "✕";
-  x.title = "移除";
-  x.setAttribute("aria-label", "移除");
+  x.title = "Remove";
+  x.setAttribute("aria-label", "Remove");
   x.addEventListener("click", () => dismiss(job.id));
   li.appendChild(x);
 
@@ -318,13 +318,13 @@ function render() {
   head.className = "asa-head";
   const title = document.createElement("span");
   title.className = "asa-title";
-  title.textContent = "🛡️ Anti-Scam 檢查";
+  title.textContent = "🛡️ Anti-Scam check";
   head.appendChild(title);
 
   const hasCompleted = jobs.some((j) => j.status === "done" || j.status === "error");
   if (hasCompleted) {
     const clearBtn = document.createElement("button");
-    clearBtn.textContent = "清除已完成";
+    clearBtn.textContent = "Clear completed";
     clearBtn.addEventListener("click", clearCompleted);
     head.appendChild(clearBtn);
   }

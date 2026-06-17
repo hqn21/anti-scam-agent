@@ -71,7 +71,7 @@ async function patchJob(id, patch) {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "asa-check-link",
-    title: "用 Anti-Scam Agent 檢查此連結",
+    title: "Check this link with Anti-Scam Agent",
     contexts: ["link"],
   });
 });
@@ -105,7 +105,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       hostname: safeHostname(url),
       base,
       status: "error",
-      error: String(e && e.message ? e.message : e) + "（伺服器無法連線？）",
+      error: String(e && e.message ? e.message : e) + " (server unreachable?)",
       createdAt: Date.now(),
     });
   }
@@ -138,7 +138,7 @@ async function pollOnce() {
         const n = (failureCounts.get(job.id) || 0) + 1;
         failureCounts.set(job.id, n);
         if (n >= MAX_CONSECUTIVE_FAILURES) {
-          await patchJob(job.id, { status: "error", error: "伺服器無法連線" });
+          await patchJob(job.id, { status: "error", error: "Server unreachable" });
           failureCounts.delete(job.id);
         }
         return; // otherwise just retry next tick
@@ -156,7 +156,7 @@ async function pollOnce() {
           reportUrl: `${job.base}/report/${job.id}`,
         });
       } else if (data.status === "error") {
-        await patchJob(job.id, { status: "error", error: data.error || "分析失敗" });
+        await patchJob(job.id, { status: "error", error: data.error || "Analysis failed" });
       } else {
         // queued / running -> reflect the latest server status
         if (job.status !== data.status) {

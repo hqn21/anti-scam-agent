@@ -69,7 +69,7 @@ export function useAnalysisPolling(): AnalysisPollingResult {
           jid = resp.id;
         } catch (e) {
           if (mountedRef.current && generationRef.current === gen) {
-            setError(e instanceof Error ? e.message : "分析失敗");
+            setError(e instanceof Error ? e.message : "Analysis failed");
             setStatus("error");
           }
           return;
@@ -103,7 +103,7 @@ export function useAnalysisPolling(): AnalysisPollingResult {
                 setResult(pollResp.curated ?? null);
                 clearTimers();
               } else if (pollResp.status === "error") {
-                setError(pollResp.error ?? "分析失敗");
+                setError(pollResp.error ?? "Analysis failed");
                 clearTimers();
               }
             } catch {

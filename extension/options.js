@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function showStatus() {
-    statusEl.textContent = "已儲存 ✓";
+    statusEl.textContent = "Saved ✓";
     setTimeout(() => {
       statusEl.textContent = "";
     }, 1500);

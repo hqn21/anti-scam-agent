@@ -24,11 +24,11 @@ const VERDICT_ORDER: Verdict[] = [
 ];
 
 const VERDICT_LABELS: Record<Verdict, string> = {
-  scam: "詐騙",
-  likely_scam: "可能詐騙",
-  uncertain: "不確定",
-  likely_legitimate: "可能合法",
-  legitimate: "合法",
+  scam: "Scam",
+  likely_scam: "Likely scam",
+  uncertain: "Uncertain",
+  likely_legitimate: "Likely legitimate",
+  legitimate: "Legitimate",
 };
 
 export default function Dashboard() {
@@ -49,19 +49,19 @@ export default function Dashboard() {
       });
   }, []);
 
-  if (loading) return <p className="text-gray-500">載入中…</p>;
-  if (error || !stats) return <p className="text-red-500">載入失敗</p>;
+  if (loading) return <p className="text-gray-500">Loading…</p>;
+  if (error || !stats) return <p className="text-red-500">Failed to load</p>;
 
   if (stats.total === 0) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">儀表板</h1>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
         <div className="bg-white border rounded-lg p-8 text-center text-gray-500">
-          尚無分析紀錄，前往
+          No analyses yet. Go to
           <Link to="/query" className="text-blue-600 underline mx-1">
-            『查詢』
+            Query
           </Link>
-          分析第一個網站。
+          to analyze your first site.
         </div>
       </div>
     );
@@ -81,49 +81,49 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">儀表板</h1>
+      <h1 className="text-2xl font-bold">Dashboard</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="總分析數" value={String(stats.total)} />
+        <StatCard label="Total analyses" value={String(stats.total)} />
         <StatCard
-          label="詐騙"
+          label="Scam"
           value={String(stats.scam_count)}
           accent="text-red-600"
         />
         <StatCard
-          label="合法"
+          label="Legitimate"
           value={String(stats.legit_count)}
           accent="text-green-600"
         />
         <StatCard
-          label="不確定"
+          label="Uncertain"
           value={String(stats.uncertain_count)}
           accent="text-amber-600"
         />
         <StatCard
-          label="詐騙率"
+          label="Scam rate"
           value={(stats.scam_rate * 100).toFixed(1) + "%"}
           accent="text-red-600"
         />
         <StatCard
-          label="平均耗時"
+          label="Avg duration"
           value={stats.avg_duration_s.toFixed(1) + "s"}
         />
         <StatCard
-          label="平均成本"
+          label="Avg cost"
           value={"$" + avgCost.toFixed(4)}
         />
         <StatCard
-          label="總成本"
+          label="Total cost"
           value={"$" + stats.total_cost_usd.toFixed(4)}
         />
       </div>
 
       <section
         className="bg-white border rounded-lg p-5 shadow-sm"
-        aria-label="判定分佈"
+        aria-label="Verdict distribution"
       >
-        <h2 className="text-lg font-semibold mb-4">判定分佈</h2>
+        <h2 className="text-lg font-semibold mb-4">Verdict distribution</h2>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={verdictChartData}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -144,9 +144,9 @@ export default function Dashboard() {
 
       <section
         className="bg-white border rounded-lg p-5 shadow-sm"
-        aria-label="詐騙類型"
+        aria-label="Scam types"
       >
-        <h2 className="text-lg font-semibold mb-4">詐騙類型</h2>
+        <h2 className="text-lg font-semibold mb-4">Scam types</h2>
         {scamTypeChartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={scamTypeChartData}>
@@ -158,7 +158,7 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-gray-500">尚無詐騙類型資料</p>
+          <p className="text-gray-500">No scam type data yet</p>
         )}
       </section>
     </div>

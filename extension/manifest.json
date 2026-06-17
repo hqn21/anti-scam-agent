@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Anti-Scam Agent",
   "version": "0.1.0",
-  "description": "右鍵檢查任一連結是否為詐騙網站（透過本機 Anti-Scam Agent）。",
+  "description": "Right-click any link to check whether it is a scam site (via a local Anti-Scam Agent).",
   "permissions": ["contextMenus", "storage", "alarms"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "background.js" },

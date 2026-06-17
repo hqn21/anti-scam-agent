@@ -6,8 +6,8 @@ import VerdictBadge from "../components/VerdictBadge";
 import type { Verdict } from "../types";
 
 const sourceLabel: Record<string, string> = {
-  web: "網站",
-  extension: "擴充",
+  web: "Web",
+  extension: "Extension",
   cli: "CLI",
 };
 
@@ -15,21 +15,21 @@ function StatusPill({ status }: { status: string }) {
   if (status === "queued") {
     return (
       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-        排隊中
+        Queued
       </span>
     );
   }
   if (status === "running") {
     return (
       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-600">
-        分析中
+        Running
       </span>
     );
   }
   if (status === "error") {
     return (
       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600">
-        錯誤
+        Error
       </span>
     );
   }
@@ -64,25 +64,25 @@ export default function History() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">歷史紀錄</h1>
+        <h1 className="text-2xl font-bold text-gray-800">History</h1>
         <button
           onClick={fetchList}
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
         >
-          重新整理
+          Refresh
         </button>
       </div>
 
       {loading && (
-        <p className="text-gray-500 text-center py-12">載入中…</p>
+        <p className="text-gray-500 text-center py-12">Loading…</p>
       )}
 
       {!loading && error && (
-        <p className="text-red-500 text-center py-12">載入失敗</p>
+        <p className="text-red-500 text-center py-12">Failed to load</p>
       )}
 
       {!loading && !error && rows !== null && rows.length === 0 && (
-        <p className="text-gray-400 text-center py-12">尚無分析紀錄。</p>
+        <p className="text-gray-400 text-center py-12">No analyses yet.</p>
       )}
 
       {!loading && !error && rows !== null && rows.length > 0 && (
@@ -91,22 +91,22 @@ export default function History() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">
-                  時間
+                  Time
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">
-                  網域
+                  Domain
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">
-                  判定
+                  Verdict
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">
-                  來源
+                  Source
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">
-                  連結
+                  Link
                 </th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap">
-                  操作
+                  Action
                 </th>
               </tr>
             </thead>
@@ -124,7 +124,7 @@ export default function History() {
                     } transition-colors`}
                   >
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {new Date(row.created_at).toLocaleString("zh-TW")}
+                      {new Date(row.created_at).toLocaleString("en-US")}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">
                       {row.domain}
@@ -151,7 +151,7 @@ export default function History() {
                           }}
                           className="text-blue-600 hover:underline text-sm font-medium"
                         >
-                          查看
+                          View
                         </button>
                       ) : (
                         <span className="text-gray-300 text-sm">—</span>
