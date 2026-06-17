@@ -30,7 +30,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _MAX_STEPS = 20
-_TIMEOUT_SECONDS = 480  # 15 minutes
+_TIMEOUT_SECONDS = 480  # 8 minutes
 # Headless by default (servers/CI have no display); set ASA_HEADLESS=0 to watch the
 # browser while debugging.
 _HEADLESS = os.environ.get("ASA_HEADLESS", "1") not in ("0", "false", "False")
