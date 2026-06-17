@@ -10,3 +10,4 @@ __pycache__/
 anti_scam.db
 web/node_modules/
 web/dist/
+.claude/
