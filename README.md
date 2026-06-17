@@ -35,7 +35,12 @@ uv sync                # install Python dependencies
 cp .env.example .env   # then fill in your API keys
 ```
 
-## 1. CLI
+## Ways to run it
+
+The same pipeline is exposed four ways — a CLI, an HTTP API, a web app, and a Chrome
+extension. Pick whichever fits; they all share the same SQLite store and report shape.
+
+### CLI
 
 Analyze a single URL or bare domain (bare domains are normalized to `http://`):
 
@@ -48,7 +53,7 @@ It prints the assessment JSON to stdout and writes a per-run report folder under
 path goes to stderr). `--verbose` (or `ASA_LOG_VERBOSE=1`) inlines the full agent thinking into
 the report.
 
-## 2. API server
+### API server
 
 ```bash
 uv run anti-scam-server                          # http://127.0.0.1:8000
@@ -72,7 +77,7 @@ keep real-browser usage and API cost under control.
 
 When a built web app exists at `web/dist/`, the server also serves it at `/`.
 
-## 3. Web app
+### Web app
 
 React, Vite, TypeScript, and Tailwind. It has a Dashboard (totals, verdict distribution, scam
 types, cost and time), a History list (every past run, with click-through to its report), a
@@ -86,7 +91,7 @@ Install web dependencies once:
 npm --prefix web install
 ```
 
-### Option A: all-in-one demo (recommended)
+#### Option A: all-in-one demo (recommended)
 
 Build the app and let the API server serve it:
 
@@ -95,7 +100,7 @@ npm --prefix web run build   # produces web/dist/
 uv run anti-scam-server      # then open http://localhost:8000
 ```
 
-### Option B: dev mode (hot reload)
+#### Option B: dev mode (hot reload)
 
 Run the API and the Vite dev server side by side (Vite proxies `/api` to `:8000`):
 
@@ -104,7 +109,7 @@ uv run anti-scam-server      # terminal 1
 npm --prefix web run dev     # terminal 2, then open http://localhost:5173
 ```
 
-## 4. Chrome extension
+### Chrome extension
 
 Right-click any link to run a check from the context menu. A panel appears in the bottom-right
 corner listing each check: a live elapsed-time counter while it runs, then a verdict badge, the
