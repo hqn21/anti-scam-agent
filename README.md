@@ -57,7 +57,6 @@ the report.
 
 ```bash
 uv run anti-scam-server                          # http://127.0.0.1:8000
-uv run anti-scam-server --host 0.0.0.0 --port 8000
 ```
 
 Configurable via flags or env vars: `ASA_HOST`, `ASA_PORT`, and `ASA_DB_PATH` (the SQLite file,
